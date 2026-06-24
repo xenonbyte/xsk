@@ -24,6 +24,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - `xsk uninstall` removes exactly and only the files `xsk` created, leaving user/third-party files untouched.
 - Each of the 5 skills is installable, behaves as specified, and reads naturally (no AI-formulaic wording).
 - A non-agent-skill project invoking `xsk-skill-scaffold` fails loud with a clear reason.
+- `xsk-skill-scaffold` applied to this repo audits to zero gaps (the project conforms to its own standard; see §4.3 self-conformance).
 
 ---
 
@@ -134,6 +135,16 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - Manifest-backed install safety (see §9).
 - Golden-snapshot the generated skill shell; mask embedded `shared/` body.
 - Bilingual README (`README.md` + `README.zh-CN.md`) with identical headings, English literals preserved; content-pinning tests.
+
+**Self-conformance (dogfooding)**: `xsk` is itself an agent-skill project and MUST conform to this standard. Its own form satisfies every checklist item above:
+
+- **CLI surface**: `version`, `help`, `install [--platform <list>]`, `uninstall [--platform <list>]`, `status`, `doctor` (see §6).
+- **Platforms**: Claude Code, Codex, opencode, Gemini — all 4 full (see §7).
+- **Generation model**: `shared/` + `templates/` + `fragments/` (see §8).
+- **Manifest-backed safety**: owned-only removal, ownership markers, atomic writes, symlink refusal (see §9).
+- **Bilingual README** with content-pinning tests.
+
+Invariant: running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The scaffold skill is validated by applying it to its own source project.
 
 **Platforms**: all 4, full.
 
