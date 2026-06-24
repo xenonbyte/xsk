@@ -35,7 +35,7 @@ The project must conform to its own scaffold standard; the standard and the proj
 
 ## Boundaries
 - `xsk` writes only under `~/.xsk/` and the four platform skill dirs it installs into — nowhere else under the user's home.
-- Uninstall removes only manifest-recorded paths, and only after verifying the `.xsk-owned` ownership marker inside each directory.
+- Uninstall removes only manifest-recorded generated paths, restores valid manifest backups for displaced originals when the generated file is unmodified, and verifies the `.xsk-owned` ownership marker before removing any generated directory.
 - `xsk` never removes or traverses through symlinks; it refuses on encounter.
 - `xsk-bypass-claude` writes exactly one field (`permissions.defaultMode`), preserving every other key, and reads only `.claude/settings.json` (not `settings.local.json`).
 - `doctor` is read-only probing of Node version, target-dir writability, and manifest shape; it makes no capability claims.
@@ -49,7 +49,7 @@ The project must conform to its own scaffold standard; the standard and the proj
 - Adding a 6th skill beyond the locked set of 5 (SCOPE-IN-001).
 
 ## Mitigations
-- Manifest-backed install/uninstall with per-directory `.xsk-owned` markers gates all directory removal (RISK-SEC-001).
+- Manifest-backed install/uninstall with per-directory `.xsk-owned` markers gates all directory removal, and uninstall restores valid backups for displaced originals when safe (RISK-SEC-001).
 - Symlink refusal at every removal/traversal path (RISK-SEC-002).
 - Atomic writes (temp-sibling + rename) with backup restore on failure; field-preserving merge for `xsk-bypass-claude` (RISK-SEC-003).
 - Platform facts carry a verification date (2026-06-25) and a reference list (§14); `doctor` and docs flag staleness rather than assert immutability (RISK-TECH-001).

@@ -9,7 +9,7 @@ r2p_updated_at: 2026-06-24T20:04:47.820214+00:00
 # Design
 
 ## Design Summary
-A self-contained, zero-dependency Node ≥ 20 CommonJS CLI. A `skills.js` registry describes 5 skills with per-platform targeting; `generator.js` renders one `<name>/SKILL.md` per (skill × platform) by inlining `shared/` behavior and per-skill `templates/fragments/` into `templates/skill.md.tmpl`. `install.js` writes each artifact into the platform's skill dir via atomic temp-sibling + `rename`, backed by per-platform manifests under `~/.xsk/`. `uninstall.js` is manifest-owned and ownership-marker-gated. `status`/`doctor` are read-only surface checks. The repo is greenfield, so this design is the from-scratch blueprint.
+A self-contained, zero-dependency Node ≥ 20 CommonJS CLI. A `skills.js` registry describes 5 skills with per-platform targeting; `generator.js` renders one `<name>/SKILL.md` per (skill × platform) by inlining `shared/` behavior and per-skill `templates/fragments/` into `templates/skill.md.tmpl`. `install.js` writes each artifact into the platform's skill dir via atomic temp-sibling + `rename`, backed by per-platform manifests under `~/.xsk/`. `uninstall.js` is manifest-owned, ownership-marker-gated, and restores valid manifest backups for displaced originals when the generated file is unmodified. `status`/`doctor` are read-only surface checks. The repo is greenfield, so this design is the from-scratch blueprint.
 
 ## Current Code Evidence
 Greenfield. The repo currently contains only `docs/REQUIREMENTS.md` plus tooling dirs (`.req-to-plan`, `.codegraph`, `.drfx`, `.claude`). No `package.json`, no `bin/`, no `lib/`, no dependencies, no entrypoints (Project Context Pack: `source_dirs: ['docs']`). Every component below is to be built.
@@ -44,7 +44,7 @@ Module layout (mirrors REQUIREMENTS.md §5):
 - `lib/capability.js` — light environment checks for `doctor`.
 - `lib/adapters/{claude,codex,opencode,gemini}.js` — skills-dir root + optional frontmatter rendering; no capability probes.
 
-Install flow: generate → for each platform, write `<skill-root>/<name>/SKILL.md` + `.xsk-owned` marker atomically, displacing pre-existing user files to backups, then record every path in the manifest. Uninstall flow: read manifest → for each path, verify the ownership marker for dirs → remove file/dir → never traverse symlinks → report full or partial (user-edited files retained, manifest narrowed).
+Install flow: generate → for each platform, write `<skill-root>/<name>/SKILL.md` + `.xsk-owned` marker atomically, displacing pre-existing user files to backups, then record every path in the manifest. Uninstall flow: read manifest → for each path, verify the ownership marker for dirs → if the generated file is unmodified, remove it and restore the valid recorded backup to its target → never traverse symlinks → report full or partial (user-edited generated files retained, backups preserved, manifest narrowed).
 
 ### DES-SEC-001 — Safety invariants
 Owned-only removal; ownership markers gate directory removal; symlink refusal; atomic write with backup restore; field-preserving JSON merge for bypass-claude.
@@ -53,7 +53,7 @@ Owned-only removal; ownership markers gate directory removal; symlink refusal; a
 none
 
 ## Rollback
-`xsk uninstall` is the rollback. It removes only manifest-recorded paths after verifying `.xsk-owned` markers; never touches unowned or third-party files; refuses symlinks; retains user-edited generated files with a *partial* report and a narrowed manifest so a later uninstall can finish. Atomic writes keep a pre-write backup so a failed write restores the original in place.
+`xsk uninstall` is the rollback. It removes only manifest-recorded generated paths after verifying `.xsk-owned` markers; restores valid manifest backups for displaced originals when the generated file is unmodified; never touches unowned or third-party files; refuses symlinks; retains user-edited generated files with a *partial* report and a narrowed manifest so a later uninstall can finish. Atomic writes keep a pre-write backup so a failed write restores the original in place.
 
 ## Observability
 - `xsk status [--json]` — per-platform `ok` / `drift` / `invalid`; validates manifest shape, not just parse success; flags path drift vs disk.
@@ -105,7 +105,7 @@ The project must conform to its own scaffold standard; the standard and the proj
 
 ## Boundaries
 - `xsk` writes only under `~/.xsk/` and the four platform skill dirs it installs into — nowhere else under the user's home.
-- Uninstall removes only manifest-recorded paths, and only after verifying the `.xsk-owned` ownership marker inside each directory.
+- Uninstall removes only manifest-recorded generated paths, restores valid manifest backups for displaced originals when the generated file is unmodified, and verifies the `.xsk-owned` ownership marker before removing any generated directory.
 - `xsk` never removes or traverses through symlinks; it refuses on encounter.
 - `xsk-bypass-claude` writes exactly one field (`permissions.defaultMode`), preserving every other key, and reads only `.claude/settings.json` (not `settings.local.json`).
 - `doctor` is read-only probing of Node version, target-dir writability, and manifest shape; it makes no capability claims.
@@ -119,7 +119,7 @@ The project must conform to its own scaffold standard; the standard and the proj
 - Adding a 6th skill beyond the locked set of 5 (SCOPE-IN-001).
 
 ## Mitigations
-- Manifest-backed install/uninstall with per-directory `.xsk-owned` markers gates all directory removal (RISK-SEC-001).
+- Manifest-backed install/uninstall with per-directory `.xsk-owned` markers gates all directory removal, and uninstall restores valid backups for displaced originals when safe (RISK-SEC-001).
 - Symlink refusal at every removal/traversal path (RISK-SEC-002).
 - Atomic writes (temp-sibling + rename) with backup restore on failure; field-preserving merge for `xsk-bypass-claude` (RISK-SEC-003).
 - Platform facts carry a verification date (2026-06-25) and a reference list (§14); `doctor` and docs flag staleness rather than assert immutability (RISK-TECH-001).

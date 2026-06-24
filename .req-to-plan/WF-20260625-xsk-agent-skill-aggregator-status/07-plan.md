@@ -8,10 +8,15 @@ r2p_updated_at: 2026-06-24T20:21:30.750062+00:00
 
 # Plan
 
+## Execution Preconditions and Safety
+- Automated install/status/uninstall/doctor tests must run with a per-test temporary HOME/XDG_CONFIG_HOME or injected platform roots. They must not write real `~/.claude`, `~/.agents`, `~/.config/opencode`, `~/.gemini`, or `~/.xsk` paths.
+- Stop implementation if a planned automated check would mutate a real user skill/config directory. Convert it to a fixture-root test or move it to explicit manual acceptance.
+- Manual acceptance that writes real user config is opt-in only and comes after the automated sandboxed suite passes.
+
 ## Tasks
-### PLAN-TASK-001: Project baseline (package.json, LICENSE, bilingual README, self-conformance floor)
+### PLAN-TASK-001: Project baseline (package.json, LICENSE, bilingual README)
 Spec References: SPEC-BEHAVIOR-005
-Scope Coverage: SCOPE-IN-001, SCOPE-IN-002, SCOPE-IN-003, SCOPE-IN-004, SCOPE-IN-005, SCOPE-IN-006, SCOPE-IN-007 (this PLAN closes every in-scope item; each is realized by the task(s) whose Spec References implement it, declared here for trace closure)
+Scope Coverage: AC-006 and baseline prerequisites for SCOPE-IN-007 (whole-plan in-scope closure is declared in the Trace section)
 Change Type: create
 TDD Applicable: yes
 Files:
@@ -19,24 +24,21 @@ Files:
 - LICENSE
 - README.md
 - README.zh-CN.md
-- test/self-conformance.test.js
+- test/baseline.test.js
 Skeleton:
 ```javascript
-// test/self-conformance.test.js — machine-checkable conformance floor
+// test/baseline.test.js — package metadata and README heading parity
 const test = require('node:test');
 const assert = require('node:assert');
-test('self-conformance: 5 CLI commands resolve', () => {
-  assert.ok(true);
-});
-test('self-conformance: EN/CN README heading parity', () => {
+test('baseline: package metadata and README heading parity', () => {
   assert.ok(true);
 });
 ```
 Steps:
 - [ ] Author package.json (name @xenonbyte/xsk, bin.xsk, engines.node >=20, scripts test/syntaxcheck, zero runtime deps)
 - [ ] Add LICENSE (MIT); write README.md + README.zh-CN.md with identical headings and English literals preserved
-- [ ] Write the self-conformance test asserting the 5 commands, README parity, manifest.js + LICENSE presence, package.json fields
-Verification: `node --test test/self-conformance.test.js` passes and `node --check` is clean on each file.
+- [ ] Write the baseline test asserting package metadata and EN/CN README heading parity; defer full self-conformance assertions for five CLI commands and `lib/manifest.js` until Task 010 after those files exist
+Verification: `node --test test/baseline.test.js` passes and `node --check test/baseline.test.js` is clean.
 
 ### PLAN-TASK-002: lib/input.js — argv and --platform parsing
 Spec References: SPEC-BEHAVIOR-005
@@ -59,9 +61,9 @@ Steps:
 - [ ] Parse --platform <list> and --platform=<list>; reject unknown/duplicate platforms; default to all 4
 - [ ] Parse --json; reject any unknown option (fail loud)
 - [ ] Tests for every command, both platform forms, duplicates, and unknown options
-Verification: `node --test test/input.test.js` passes; `xsk install --platform foo` exits non-zero.
+Verification: `node --test test/input.test.js` passes; parser-level tests prove `parse(['install','--platform','foo'])` rejects the unknown platform.
 
-### PLAN-TASK-003: lib/skills.js registry + generator + templates + shared + xsk-think source
+### PLAN-TASK-003: lib/skills.js registry schema + generator + templates + shared + xsk-think source
 Spec References: SPEC-BEHAVIOR-006
 Change Type: create
 TDD Applicable: yes
@@ -82,11 +84,11 @@ function render(template, values) {
 module.exports = { render };
 ```
 Steps:
-- [ ] Define skills.js registry: 5 skills with name/description/platforms targeting (bypass-claude = [claude])
+- [ ] Define skills.js registry schema and register the Phase 1 skill `xsk-think`; Task 009 completes the remaining four skill entries and Claude-only targeting for `xsk-bypass-claude`
 - [ ] Author templates/skill.md.tmpl with {{PLACEHOLDER}} slots (frontmatter + body) and shared/ single-source behavior text + skills/think source
 - [ ] generator.js: inline shared/ + per-skill fragments via {{PLACEHOLDER}} substitution only; emit platform-neutral output, no runtime shared/ dir
-- [ ] Tests: one SKILL.md per (skill x platform); fragments inlined; name+description frontmatter present
-Verification: `node --test test/generator.test.js` passes; a generated SKILL.md carries name + description frontmatter.
+- [ ] Tests: Phase 1 generation for `xsk-think` on Claude; fragments inlined; name+description frontmatter present; no unreplaced placeholders
+Verification: `node --test test/generator.test.js` passes; generated `xsk-think` SKILL.md carries name + description frontmatter and inlined shared/fragments.
 
 ### PLAN-TASK-004: lib/manifest.js — read/validate/write manifest
 Spec References: SPEC-BEHAVIOR-003
@@ -133,7 +135,7 @@ Steps:
 - [ ] install.js: per (skill x platform) preflight writability, backup pre-existing file, atomic write (temp-sibling + rename), drop .xsk-owned marker
 - [ ] Append every created path to the manifest; apply per-skill platform targeting (skip bypass-claude off Claude)
 - [ ] Tests: atomic write; .xsk-owned marker present; pre-existing user file backed up; manifest recorded
-Verification: `node --test test/install.test.js` passes; install creates ~/.claude/skills/xsk-think/SKILL.md plus .xsk-owned.
+Verification: `node --test test/install.test.js` passes with temporary HOME or injected roots; install creates the fixture equivalent of `~/.claude/skills/xsk-think/SKILL.md` plus `.xsk-owned`.
 
 ### PLAN-TASK-006: lib/uninstall.js — manifest-owned removal with user-edit preservation
 Spec References: SPEC-BEHAVIOR-002
@@ -154,9 +156,10 @@ module.exports = { uninstall };
 Steps:
 - [ ] Read manifest; remove only recorded paths
 - [ ] Require .xsk-owned marker before removing a dir (skip + report if absent); never traverse or remove symlinks
+- [ ] Restore each valid `backups[]` entry to its target when the generated file is unmodified; if the generated file was user-edited, retain it, preserve the backup record, report partial, and narrow the manifest
 - [ ] DECISION (resolves spec review [Important]): user-edit detection via regenerate-and-diff — regenerate the file from current sources and byte-compare to disk; if they differ, treat as user-edited, retain it, report partial, narrow the retained manifest
-- [ ] Tests: owned-only removal; missing marker skips dir; symlink refused; edited file retained with partial report and narrowed manifest
-Verification: `node --test test/uninstall.test.js` passes; an edited generated file is retained and the exit code signals partial.
+- [ ] Tests: owned-only removal; missing marker skips dir; symlink refused; valid backup restored; edited generated file retained with partial report and narrowed manifest
+Verification: `node --test test/uninstall.test.js` passes; a displaced original is restored from backup when safe, and an edited generated file is retained with a partial exit code.
 
 ### PLAN-TASK-007: lib/status.js + lib/capability.js — status and doctor
 Spec References: SPEC-BEHAVIOR-003, SPEC-BEHAVIOR-004
@@ -188,6 +191,7 @@ Change Type: create
 TDD Applicable: yes
 Files:
 - bin/xsk.js
+- test/cli.test.js
 Skeleton:
 ```javascript
 #!/usr/bin/env node
@@ -205,11 +209,11 @@ Steps:
 - [ ] Wire parse() to command dispatch (version/help/install/uninstall/status/doctor)
 - [ ] version prints package version; help prints command list (also -v/--version, -h/--help, no-args)
 - [ ] Unknown options exit non-zero (fail loud)
-- [ ] Smoke checks for version and help
-Verification: `node bin/xsk.js version` prints the version; `node bin/xsk.js --bad` exits non-zero.
+- [ ] Smoke checks for version, help, install, uninstall, status, doctor, and unknown options; install/uninstall/status/doctor smoke checks use fixture roots
+Verification: `node --test test/cli.test.js` passes; `node bin/xsk.js version` prints the version; `node bin/xsk.js --bad` exits non-zero.
 
 ### PLAN-TASK-009: codex/opencode/gemini adapters + remaining 4 skills
-Spec References: SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-006, SPEC-BEHAVIOR-007
+Spec References: SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-006, SPEC-BEHAVIOR-007, SPEC-BEHAVIOR-008
 Change Type: create
 TDD Applicable: yes
 Files:
@@ -220,6 +224,8 @@ Files:
 - skills/skill-scaffold/SKILL.md
 - skills/write-req/SKILL.md
 - skills/archive-req/SKILL.md
+- test/generator.test.js
+- test/install.test.js
 Skeleton:
 ```javascript
 // lib/adapters/codex.js — skills-dir root ~/.agents/skills/ (agent-compatible)
@@ -228,19 +234,22 @@ module.exports = { skillsRoot: '.agents/skills' };
 ```
 Steps:
 - [ ] codex adapter root ~/.agents/skills/; opencode root ~/.config/opencode/skills/; gemini root ~/.gemini/skills/
-- [ ] Author skills/bypass-claude/SKILL.md (Claude only; writes .claude/settings.json permissions.defaultMode) registered platforms:[claude]
+- [ ] Complete skills.js registry with the remaining four skills; register `xsk-bypass-claude` as platforms:[claude]
+- [ ] Author skills/bypass-claude/SKILL.md (Claude only; writes .claude/settings.json permissions.defaultMode)
 - [ ] Author skills/skill-scaffold, write-req, archive-req SKILL.md sources
 - [ ] Adapters render platform-neutral frontmatter (when_to_use/dispatch_intent as optional source metadata, never a required field a platform ignores)
-- [ ] Tests: per-platform roots correct; bypass-claude skipped on non-Claude platforms
-Verification: `node --test test/install.test.js` passes with all adapters; bypass-claude installs only under ~/.claude/skills/.
+- [ ] Tests: per-platform roots correct; generator emits one artifact per supported (skill x platform); bypass-claude skipped on non-Claude platforms
+Verification: `node --test test/generator.test.js test/install.test.js` passes with all adapters and fixture roots; bypass-claude installs only under the fixture Claude skills root.
 
-### PLAN-TASK-010: golden snapshots + safety suite + README pinning
-Spec References: SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-002, SPEC-BEHAVIOR-003
+### PLAN-TASK-010: golden snapshots + safety suite + README/self-conformance pinning + package dry-run
+Spec References: SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-002, SPEC-BEHAVIOR-003, SPEC-BEHAVIOR-005, SPEC-BEHAVIOR-008
 Change Type: create
 TDD Applicable: yes
 Files:
 - test/golden.test.js
 - test/safety.test.js
+- test/skill-behavior.test.js
+- test/self-conformance.test.js
 - test/readme-pinning.test.js
 Skeleton:
 ```javascript
@@ -251,16 +260,19 @@ test('uninstall is owned-only', () => { assert.ok(true); });
 ```
 Steps:
 - [ ] golden.test.js: snapshot generated SKILL.md shell per (skill x platform); mask embedded shared/ body with a sentinel
-- [ ] safety.test.js: owned-only removal, ownership-marker gating, symlink refusal, atomic-write rollback, user-edit preservation
+- [ ] safety.test.js: owned-only removal, ownership-marker gating, symlink refusal, atomic-write rollback, backup restoration for displaced originals, user-edit preservation
+- [ ] skill-behavior.test.js: for all 5 skills, pin required purpose, trigger/when-to-use cues, critical constraints, output/stop behavior, prohibited placeholders/internal references, and no AI-formulaic filler; record a manual prose-review checklist for natural wording
 - [ ] readme-pinning.test.js: commands/tokens present; EN/CN heading parity
-- [ ] Full round-trip: install -> status valid -> uninstall -> clean
-Verification: `npm test` (node --test) full suite passes; `npm run syntaxcheck` clean; install -> status -> uninstall leaves zero stale files.
+- [ ] self-conformance.test.js: assert the five CLI commands resolve, EN/CN README headings match, `lib/manifest.js` + `LICENSE` exist, and package.json carries required fields
+- [ ] Full round-trip with temporary HOME/XDG_CONFIG_HOME or injected platform roots: install -> status valid -> uninstall -> clean
+- [ ] `npm pack --dry-run` contents check: package includes package.json, LICENSE, README.md, README.zh-CN.md, bin/xsk.js, lib/**, skills/**, shared/**, templates/**, and docs/REQUIREMENTS.md; excludes .req-to-plan/, .drfx/, .claude/, test fixtures, and archived requirement outputs
+Verification: `npm test` (node --test) full suite passes; `npm run syntaxcheck` clean; `npm pack --dry-run` contents are correct; sandboxed install -> status -> uninstall leaves zero stale fixture files.
 
 ## Trace
 <!-- Map this stage's IDs to upstream/downstream. R3 derives & checks closure. -->
 | This ID | Upstream | Status |
 |---|---|---|
-| PLAN-TASK-001 | spec SPEC-BEHAVIOR-005; requirement SCOPE-IN-007, AC-005 | derived |
+| PLAN-TASK-001 | spec SPEC-BEHAVIOR-005; requirement AC-006 and baseline prerequisites for SCOPE-IN-007 | derived |
 | PLAN-TASK-002 | spec SPEC-BEHAVIOR-005; requirement SCOPE-IN-002 | derived |
 | PLAN-TASK-003 | spec SPEC-BEHAVIOR-006; requirement SCOPE-IN-005 | derived |
 | PLAN-TASK-004 | spec SPEC-BEHAVIOR-003; requirement SCOPE-IN-004 | derived |
@@ -268,8 +280,8 @@ Verification: `npm test` (node --test) full suite passes; `npm run syntaxcheck` 
 | PLAN-TASK-006 | spec SPEC-BEHAVIOR-002; requirement AC-002; risk RISK-SEC-001 [ADDRESSED], RISK-SEC-002 [ADDRESSED] | derived |
 | PLAN-TASK-007 | spec SPEC-BEHAVIOR-003, SPEC-BEHAVIOR-004; requirement D8 | derived |
 | PLAN-TASK-008 | spec SPEC-BEHAVIOR-005; requirement SCOPE-IN-002 | derived |
-| PLAN-TASK-009 | spec SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-006, SPEC-BEHAVIOR-007; requirement SCOPE-IN-001, D7; risk RISK-TECH-002 [ADDRESSED] | derived |
-| PLAN-TASK-010 | spec SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-002, SPEC-BEHAVIOR-003; requirement AC-006 | derived |
+| PLAN-TASK-009 | spec SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-006, SPEC-BEHAVIOR-007, SPEC-BEHAVIOR-008; requirement SCOPE-IN-001, AC-003, D7; risk RISK-TECH-002 [ADDRESSED] | derived |
+| PLAN-TASK-010 | spec SPEC-BEHAVIOR-001, SPEC-BEHAVIOR-002, SPEC-BEHAVIOR-003, SPEC-BEHAVIOR-005, SPEC-BEHAVIOR-008; requirement AC-003, AC-005, AC-006, SCOPE-IN-007 | derived |
 
 ## Upstream Summary (read-only)
 # Spec
@@ -279,7 +291,7 @@ Verification: `npm test` (node --test) full suite passes; `npm run syntaxcheck` 
 Generate one `<name>/SKILL.md` per (skill × selected platform) by inlining `shared/` + the skill's `templates/fragments/` into `templates/skill.md.tmpl`. For each platform: preflight writability, back up any pre-existing user file at the target, write atomically (temp-sibling + `rename`), drop a `.xsk-owned` marker inside each created skill dir, then append every created path to `~/.xsk/manifests/<platform>.manifest`. Per-skill platform targeting: a skill with `platforms: [claude]` (e.g. `xsk-bypass-claude`) is skipped on other platforms. `--platform` defaults to all 4; rejects unknown/duplicate values and any unknown option (fail loud). Exit 0 on success, non-zero on any failure after rollback.
 
 ### SPEC-BEHAVIOR-002 — `uninstall [--platform <list>]`
-Read the manifest; remove only manifest-recorded paths. Before removing a directory, require a valid `.xsk-owned` marker inside it; if absent, skip and report. Never remove or traverse a symlink. If a generated file was modified by the user, keep it, report a *partial* uninstall, and narrow the retained manifest so a later run can finish. Exit 0 (full) or a distinct code (partial).
+Read the manifest; remove only manifest-recorded generated paths. Before removing a directory, require a valid `.xsk-owned` marker inside it; if absent, skip and report. For each `backups[]` entry, restore the valid recorded backup to its target when the generated file at that target is unmodified; if the generated file was modified by the user, keep it, keep the backup record, report a *partial* uninstall, and narrow the retained manifest so a later run can finish. Never remove, restore through, or traverse a symlink. Exit 0 (full) or a distinct code (partial).
 
 ### SPEC-BEHAVIOR-003 — `status [--json]`
 Read-only. For each platform report one of `ok` (manifest shape valid AND recorded paths present on disk), `drift` (paths no longer match disk), or `invalid` (schema version mismatch, wrong platform, or missing required fields). Shape validation, not just parse success. `--json` emits machine-readable output.
@@ -296,12 +308,16 @@ Read-only probing only: Node version (>= 20), target skill-dir writability, mani
 ### SPEC-BEHAVIOR-007 — `xsk-bypass-claude` skill (Claude only)
 Operate on cwd's `.claude/settings.json`. If absent, create `.claude/` and write `{"permissions":{"defaultMode":"bypassPermissions"}}`. If present, set only `permissions.defaultMode` preserving every other field (2-space indent + trailing newline). Idempotent no-op if already set. Reads only `.claude/settings.json`, never `settings.local.json`.
 
+### SPEC-BEHAVIOR-008 — Generated skill body contracts
+Every generated `SKILL.md` must preserve the behavior promised for its source skill in REQUIREMENTS.md section 4, not only valid frontmatter. The emitted body for each skill includes purpose, when-to-use cues, constraints, and output/stop behavior matching its source: `xsk-think` stays planning-only until approval; `xsk-bypass-claude` targets only `.claude/settings.json`; `xsk-skill-scaffold` gates non-agent-skill projects before mutation; `xsk-write-req` grounds requirements in the current project and asks on blocking decisions; `xsk-archive-req` archives exactly the active requirement and leaves zero active docs. Generated text must have no unreplaced placeholders, no Waza-internal update scripts or relative reference paths, no unsupported platform-specific required fields, and no AI-formulaic filler. Natural prose quality is checked by pinned content rules plus manual review for wording not mechanically decidable.
+
 ## API / Data / Config Contracts
 - **CLI argv**: subcommand in {install, uninstall, status, doctor, version, help}; `--platform <list>` (comma-separated, also `--platform=<list>`); `--json`; `-v`/`--version`/`-h`/`--help`. Unknown options → non-zero exit.
 - **Manifest schema** (`~/.xsk/manifests/<platform>.manifest`, JSON): `schema_version`, `platform`, `version` (package version/provenance), `installed_at`, `installed_paths[]` (every file/dir created), `backups[]` (each `{target, backup}` for a displaced pre-existing file).
 - **SKILL.md frontmatter**: `name` (lowercase, hyphenated, <=64 chars, matches folder) and `description` (required) on every generated file; `when_to_use`/`dispatch_intent` are source metadata the adapter may render into supported frontmatter, body, or sidecar — never a required field for a platform that ignores it.
 - **Filesystem**: `xsk` writes only under `~/.xsk/` and the four platform skill roots (`~/.claude/skills/`, `~/.agents/skills/`, `~/.config/opencode/skills/`, `~/.gemini/skills/`). `.xsk-owned` marker (content = package name) inside each installed skill dir.
 - **Exit codes**: 0 success; non-zero on failure (with rollback); distinct partial-uninstall code.
+- **Automated filesystem tests**: install/status/uninstall/doctor tests that touch home-like paths must use a per-test temporary HOME/XDG_CONFIG_HOME or injected platform roots. Automated checks must not mutate real `~/.claude`, `~/.agents`, `~/.config/opencode`, `~/.gemini`, or `~/.xsk` paths.
 
 ## External Documentation Checked
 Platform install/discovery behavior verified against the official docs (REQUIREMENTS.md section 14).
@@ -315,12 +331,14 @@ Platform install/discovery behavior verified against the official docs (REQUIREM
 
 ## Test Matrix
 - `npm test` (`node --test`) full suite; `node --test test/<file>` single; `npm run syntaxcheck` (`node --check` all `bin/`,`lib/`,`test/`).
-- Install -> status valid -> uninstall -> clean round-trip (AC-001, AC-002, AC-007).
-- Safety: owned-only removal, ownership-marker gating, symlink refusal, atomic-write rollback, user-edit preservation (AC-002; RISK-SEC-001 [ADDRESSED], RISK-SEC-002 [ADDRESSED], RISK-SEC-003 [ADDRESSED]).
+- Install -> status valid -> uninstall -> clean round-trip using temporary HOME/XDG_CONFIG_HOME or injected platform roots (AC-001, AC-002, AC-007).
+- Safety: owned-only removal, ownership-marker gating, symlink refusal, atomic-write rollback, backup restoration for displaced originals, user-edit preservation (AC-002; RISK-SEC-001 [ADDRESSED], RISK-SEC-002 [ADDRESSED], RISK-SEC-003 [ADDRESSED]).
 - Golden-snapshot of generated SKILL.md shell per (skill × platform), masking embedded `shared/` body (AC-003).
+- Skill body behavior/prose checks: pinned tests for each source skill's purpose, trigger/when-to-use cues, critical constraints, output/stop behavior, prohibited placeholders/internal references, and no AI-formulaic filler; manual prose review for natural wording that cannot be fully machine-checked (AC-003).
 - README content-pinning (commands/tokens present; EN/CN heading parity) (AC-006).
+- `npm pack --dry-run` contents check: package includes `package.json`, `LICENSE`, `README.md`, `README.zh-CN.md`, `bin/xsk.js`, `lib/**`, `skills/**`, `shared/**`, `templates/**`, and `docs/REQUIREMENTS.md`; excludes `.req-to-plan/`, `.drfx/`, `.claude/`, test fixtures, and archived requirement outputs (AC-006).
 - Self-conformance test: five CLI commands resolve, EN/CN README headings match, `lib/manifest.js` + `LICENSE` exist, `package.json` carries required fields (AC-005, SCOPE-IN-007).
-- Manual acceptance: `xsk install` -> `~/.claude/skills/xsk-think/SKILL.md` loads; `xsk status --json` valid; non-agent-skill project + scaffold errors out (AC-004).
+- Manual acceptance, opt-in only because it writes real user config: `xsk install` -> `~/.claude/skills/xsk-think/SKILL.md` loads; `xsk status --json` valid; non-agent-skill project + scaffold errors out (AC-004).
 
 ## Non-goals
 - No remote skill marketplace/registry/distribution server (SCOPE-OUT-001).
@@ -330,7 +348,7 @@ Platform install/discovery behavior verified against the official docs (REQUIREM
 - No Windows-first guarantees; macOS/Linux, Node >= 20 (SCOPE-OUT-005).
 
 ## PLAN Handoff
-Build in the REQUIREMENTS.md section 11 phase order: Phase 1 (skeleton + install core + `xsk-think` on Claude, with project baseline `package.json`/`LICENSE`/bilingual README + self-conformance floor), Phase 2 (`xsk-bypass-claude` + codex/opencode/gemini adapters + `doctor`), Phase 3 (`xsk-skill-scaffold` + `xsk-write-req` + `xsk-archive-req`). Hold invariants: zero third-party runtime deps; one SKILL.md per (skill × platform); platform-neutral generated body + required frontmatter; `status` validates shape not just parse; the self-conformance test is the executable floor. The module list from DES-ARCH-001 is the build order.
+Build in the REQUIREMENTS.md section 11 phase order: Phase 1 (skeleton + install core + `xsk-think` on Claude, with project baseline `package.json`/`LICENSE`/bilingual README and the self-conformance floor verified once the CLI/manifest files exist), Phase 2 (`xsk-bypass-claude` + codex/opencode/gemini adapters + `doctor`), Phase 3 (`xsk-skill-scaffold` + `xsk-write-req` + `xsk-archive-req`). Hold invariants: zero third-party runtime deps; one SKILL.md per (skill × platform); platform-neutral generated body + required frontmatter; `status` validates shape not just parse; the self-conformance test is the executable floor. The module list from DES-ARCH-001 is the build order.
 
 ## Trace
 <!-- Map this stage's IDs to upstream/downstream. R3 derives & checks closure. -->
@@ -343,6 +361,7 @@ Build in the REQUIREMENTS.md section 11 phase order: Phase 1 (skeleton + install
 | SPEC-BEHAVIOR-005 | requirement SCOPE-IN-002 | derived |
 | SPEC-BEHAVIOR-006 | design DES-ARCH-001; requirement SCOPE-IN-005; risk RISK-TECH-002 [ADDRESSED] | derived |
 | SPEC-BEHAVIOR-007 | requirement SCOPE-IN-001, D7; risk RISK-SEC-003 [ADDRESSED] | derived |
+| SPEC-BEHAVIOR-008 | requirement AC-003, SCOPE-IN-001; design SPEC Handoff | derived |
 | API/Config Contracts | design DES-ARCH-001, DES-SEC-001 | derived |
 | External Docs Checked | requirement Assumptions; risk RISK-TECH-001 [ADDRESSED] | derived |
 | Test Matrix | requirement AC-001..007, section 12 | derived |
