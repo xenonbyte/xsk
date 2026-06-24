@@ -91,14 +91,15 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 **Distillation policy**:
 
-- **Promote**: the core logic — write `.claude/settings.json` with `permissions.defaultMode = "bypassPermissions"`, and the governance guard that refuses when `permissions.disableBypassPermissionsMode === true` is set in either `settings.json` or `settings.local.json`.
+- **Promote**: the core logic — write `.claude/settings.json` with `permissions.defaultMode = "bypassPermissions"` (verified setting), and the governance guard that refuses when `permissions.disableBypassPermissionsMode === true` is set in either `settings.json` or `settings.local.json`.
+- `permissions.defaultMode = "bypassPermissions"` is verified against the Claude Code settings schema. The governance field `permissions.disableBypassPermissionsMode` is `UNCONFIRMED`: it is sourced from `quick-set` and not yet verified against official Claude Code documentation. **Residual risk**: if the field is named differently or absent, the governance guard is a no-op and the refusal safety property does not hold. Verify the exact field name against the authoritative Claude Code settings schema before relying on the guard.
 - **Do NOT promote**: `quick-set`'s CLI structure and platform-switching shell (it is a different tool). This skill is not a CLI wrapper; it instructs the agent to write the config directly.
 
 **Triggers**: "bypass permissions", "跳过权限", "auto approve", "设置 bypassPermissions", "免确认".
 
 **Behavior**:
 1. Operate on the **current project directory** (`cwd`).
-2. Read `.claude/settings.json` and `.claude/settings.local.json`. If either has `permissions.disableBypassPermissionsMode: true`, refuse with a one-line reason and stop.
+2. Read `.claude/settings.json` and `.claude/settings.local.json`. If either has `permissions.disableBypassPermissionsMode: true` (`UNCONFIRMED` field — see distillation policy), refuse with a one-line reason and stop.
 3. Otherwise, set `permissions.defaultMode = "bypassPermissions"` in `.claude/settings.json` (create the file/dir if missing; preserve all existing fields; write with 2-space indent and trailing newline).
 4. Report the path written and the resulting JSON. No further action.
 
@@ -113,9 +114,9 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 **Purpose**: Bring an agent-skill project up to the `xsk` standard (CLI + multi-platform install + manifest safety), or refuse if the target is not an agent-skill project.
 
 **Rule source**: `~/x-skills/skill-creator-rule` (3 docs: CLI commands, README format, platform skills) **updated** to:
-- add **opencode** as a fourth full platform,
-- remove the Gemini advisory-only constraint (Gemini is full),
-- correct any outdated rules.
+- add **opencode** as a fourth full platform (the source only covers Claude, Codex, Gemini),
+- remove the Gemini advisory-only constraint (Gemini is full, native SKILL.md),
+- replace the source's command-file install model (Claude `.md` command / Gemini `.toml`) with the uniform SKILL.md skill-directory model used by `xsk`.
 
 **Triggers**: "scaffold skill project", "make this a skill installer", "项目规范化", "agent 技能项目脚手架", "conform to skill standard".
 
@@ -172,7 +173,7 @@ Invariant: running `xsk-skill-scaffold` against this repo MUST audit to zero gap
    - Richer input → Background, Goal, Scope (in/out), Requirements, Open Questions, Checkpoints.
 5. **Decision points → ask the user.** When a genuine technical or scoping choice changes the implementation, stop and ask the user to decide (brainstorming style: surface the options and tradeoffs, let them pick). Do not silently pick.
 6. **Brainstorming points.** Where the need is genuinely open-ended, run a short exploration with the user before writing.
-7. **Wording.** Natural, fluent English (or match the project's language). No em-dash (U+2014/U+2013). No formulaic phrasing, no filler conclusions. The author's voice wins; most editing is subtraction.
+7. **Wording.** Natural, fluent English (or match the project's language). No em-dash (U+2014) or en-dash (U+2013). No formulaic phrasing, no filler conclusions. The author's voice wins; most editing is subtraction.
 8. **Self-audit checkpoint.** Before finalizing, audit the requirement against itself. A document that fails this gate is not ready.
    - **Conflict check**: verify no internal contradictions — Goal vs Scope, in-scope vs out-of-scope, Requirements vs Open Questions, any two statements that cannot both hold. Resolve every conflict, or surface it to the user. A finalized doc must contain zero conflicts.
    - **Ambiguity check**: verify no undefined terms, unstated assumptions, or vague qualifiers ("fast", "supported", "as needed") that would force the implementer to guess. Tighten each to a concrete, testable statement. A finalized doc must leave no ambiguity that blocks implementation.
@@ -284,6 +285,7 @@ All 4 platforms are **full** and use the same `SKILL.md` skill-directory shape.
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` | skill dir |
 
 - All auto-discover `**/SKILL.md`.
+- Codex requires running with `--enable skills` to load skills (confirmed via Codex docs).
 - Gemini is **full** (native SKILL.md support, confirmed via Gemini CLI docs). No TOML, no advisory-only.
 - Frontmatter: `name` (lowercase, hyphenated, ≤64 chars, matches folder), `description` (required, covers what + when), `when_to_use`, `dispatch_intent`. Per-platform frontmatter overrides handled by the adapter if a platform requires specific fields.
 - `xsk-bypass-claude` installs to Claude only; other platforms skip it (`platforms: [claude]` in the registry).
@@ -397,14 +399,16 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 
 ## 14. References
 
-- [`~/x-studio/document-review-fix`](file:///Users/xubo/x-studio/document-review-fix) — reference installer (install/manifest/generator/adapters, 4-platform).
-- [`~/x-skills/skill-creator-rule`](file:///Users/xubo/x-skills/skill-creator-rule) — scaffold rule source (to be updated: add opencode, drop advisory-only).
-- [`~/x-skills/quick-set`](file:///Users/xubo/x-skills/quick-set) — bypassPermissions logic source.
+- [`~/x-studio/document-review-fix`](file:///Users/xubo/x-studio/document-review-fix) — reference installer (install/manifest/generator/adapters, 4-platform). `drfx` is the working name for this project (npm package `@xenonbyte/drfx`, binary `drfx`); "`drfx` machinery" throughout this doc refers to it.
+- [`~/x-skills/skill-creator-rule`](file:///Users/xubo/x-skills/skill-creator-rule) — scaffold rule source (to be updated: add opencode, drop advisory-only, switch to SKILL.md skill-directory model).
+- [`~/x-skills/quick-set`](file:///Users/xubo/x-skills/quick-set) — bypassPermissions logic source (the `disableBypassPermissionsMode` governance field originates here; `UNCONFIRMED` against official Claude Code docs).
 - [tw93/Waza `/think`](https://github.com/tw93/Waza/blob/master/skills/think/SKILL.md) — think skill source.
 - [tw93/Waza `/write`](https://github.com/tw93/Waza/blob/master/skills/write/SKILL.md) — natural-writing style reference.
 - [Fission-AI/OpenSpec `/opsx:explore`](https://github.com/Fission-AI/OpenSpec/blob/master/docs/opsx.md) — fuzzy→requirement exploration model.
-- [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/skills/) — Gemini SKILL.md native support confirmation.
-- [opencode skill config](https://opencode.ai/config.json) — opencode skill loader + paths.
+- [Codex Agent Skills](https://developers.openai.com/codex/skills) — Codex SKILL.md native support; skills live in `~/.codex/skills/<name>/` and require running Codex with `--enable skills`.
+- [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/skills/) — Gemini SKILL.md native support confirmation (`~/.gemini/skills/<name>/SKILL.md`).
+- [opencode skill config](https://opencode.ai/config.json) — opencode skill loader + paths (`~/.config/opencode/skills/<name>/SKILL.md`, scans `**/SKILL.md`).
+- [Claude Code settings](https://docs.claude.com/en/docs/claude-code/settings) — `permissions.defaultMode` verified; `disableBypassPermissionsMode` `UNCONFIRMED`.
 
 ---
 
