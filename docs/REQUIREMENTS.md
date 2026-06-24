@@ -138,7 +138,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - Golden-snapshot the generated skill shell; mask embedded `shared/` body.
 - Bilingual README (`README.md` + `README.zh-CN.md`) with identical headings, English literals preserved; content-pinning tests.
 
-**Self-conformance (dogfooding)**: `xsk` is itself an agent-skill project and MUST conform to this standard. Its own form satisfies every checklist item above:
+**Self-conformance (dogfooding)**: `xsk` is itself an agent-skill project and MUST conform to this standard when implementation is complete. The completed project must satisfy every checklist item above:
 
 - **CLI surface**: `version`, `help`, `install [--platform <list>]`, `uninstall [--platform <list>]`, `status`, `doctor` (see §6).
 - **Platforms**: Claude Code, Codex, opencode, Gemini — all 4 full (see §7).
@@ -146,7 +146,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - **Manifest-backed safety**: owned-only removal, ownership markers, atomic writes, symlink refusal (see §9).
 - **Bilingual README** with content-pinning tests.
 
-Invariant: running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The machine-checkable portion of this invariant is enforced by the self-conformance test (§12); the remainder is the scaffold skill's judgment when applied to its own source project.
+Release invariant: before `xsk` is considered complete, running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The machine-checkable portion of this invariant is enforced by the self-conformance test (§12); the remainder is the scaffold skill's judgment when applied to its own source project.
 
 **Platforms**: all 4, full.
 
@@ -280,16 +280,20 @@ All 4 platforms are **full** and use the same `SKILL.md` skill-directory shape.
 | Platform | Install location (global) | Artifact |
 |---|---|---|
 | Claude Code | `~/.claude/skills/<name>/SKILL.md` | skill dir |
-| Codex | `~/.codex/skills/<name>/SKILL.md` | skill dir |
+| Codex | `~/.agents/skills/<name>/SKILL.md` | skill dir |
 | opencode | `~/.config/opencode/skills/<name>/SKILL.md` | skill dir |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` | skill dir |
 
+External platform behavior in this section is verified as of 2026-06-25 against the §14 references.
+
 - All four auto-discover skills from their skills dir; each skill is a `<name>/SKILL.md` folder (not arbitrary `**/SKILL.md` wildcard scanning).
-- Codex requires running with `--enable skills` to load skills (confirmed via Codex docs).
-- Gemini is **full**: native SKILL.md skill-directory support, auto-discovered from `~/.gemini/skills/` (confirmed via Gemini CLI docs). Same SKILL.md artifact as the other three platforms.
-- Frontmatter: `name` (lowercase, hyphenated, ≤64 chars, matches folder), `description` (required, covers what + when), `when_to_use`, `dispatch_intent`. Per-platform frontmatter overrides handled by the adapter if a platform requires specific fields.
+- Codex user skills use the agent-compatible `~/.agents/skills/` directory. Current Codex docs do not require a `--enable skills` launch flag; Codex detects skill changes automatically, with restart as the fallback if a new skill does not appear.
+- Gemini is **full**: native SKILL.md skill-directory support, auto-discovered from `~/.gemini/skills/` and the `~/.agents/skills/` alias. Same SKILL.md artifact as the other three platforms.
+- Frontmatter/source metadata: every generated `SKILL.md` has at least `name` (lowercase, hyphenated, ≤64 chars, matches folder) and `description` (required, covers what + when). `when_to_use` and `dispatch_intent` are source metadata that adapters may render into supported frontmatter, body text, or platform metadata.
+- opencode recognizes only `name`, `description`, `license`, `compatibility`, and string-to-string `metadata` in frontmatter; unknown fields are ignored. The opencode adapter must not rely on `when_to_use` or `dispatch_intent` as recognized opencode frontmatter.
+- Alias collision rule: because Gemini and opencode can also read `~/.agents/skills/`, the generated skill body and required frontmatter must be platform-neutral. Platform-specific extras must be optional metadata or sidecar files; core behavior cannot depend on a field that another selected platform ignores.
 - `xsk-bypass-claude` installs to Claude only; other platforms skip it (`platforms: [claude]` in the registry).
-- opencode is Claude-skill-compatible: it also auto-loads `~/.claude/skills/`. `xsk` still installs opencode's copy under `~/.config/opencode/skills/` so each platform's install is independently owned and cleanly uninstallable. (A consequence: a Claude-only skill in `~/.claude/skills/` is also visible to opencode; `xsk-bypass-claude`'s body targets Claude settings and is inert elsewhere.)
+- opencode is Claude-skill-compatible: it also auto-loads `~/.claude/skills/` and agent-compatible `~/.agents/skills/`. `xsk` still installs opencode's copy under `~/.config/opencode/skills/` so each platform's install is independently owned and cleanly uninstallable. (A consequence: a Claude-only skill in `~/.claude/skills/` is also visible to opencode; `xsk-bypass-claude`'s body targets Claude settings and is inert elsewhere.)
 
 ---
 
@@ -404,7 +408,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 | D1 | Package `@xenonbyte/xsk`, binary `xsk`, prefix `xsk-` | matches npm scope; short; "X SKills" |
 | D2 | Skill names: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req` | user-defined |
 | D3 | Skill content language: English | matches the Waza ecosystem; triggers are multilingual |
-| D4 | All 4 platforms full; uniform `<home>/skills/<name>/SKILL.md` | verified: Claude, Codex, Gemini, opencode all load `SKILL.md` skill directories (Gemini CLI + opencode skills docs); opencode is Claude-skill-compatible |
+| D4 | All 4 platforms full; uniform `<skill-root>/<name>/SKILL.md` | verified: Claude, Codex, Gemini, opencode all load `SKILL.md` skill directories; Codex uses the agent-compatible `~/.agents/skills/` user root, Gemini and opencode also support that alias, and opencode is Claude-skill-compatible |
 | D5 | Self-contained zero-dep Node CJS; install/manifest/CLI modeled on a verified 4-platform install pattern, implemented in-repo | reuses a proven mechanism (per-platform homes, atomic write + `rename`, owned-only manifest uninstall, `ok`/`drift`/`invalid` status) without coupling the doc to an external source |
 | D6 | Requirement dir `requirements/`, archive gitignored | clear, version-controlled active docs |
 | D7 | `xsk-bypass-claude` is Claude-only | only sets Claude Code permissions |
@@ -417,7 +421,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 - [tw93/Waza `/think`](https://github.com/tw93/Waza/blob/master/skills/think/SKILL.md) — think skill source.
 - [tw93/Waza `/write`](https://github.com/tw93/Waza/blob/master/skills/write/SKILL.md) — natural-writing style reference.
 - [Fission-AI/OpenSpec `/opsx:explore`](https://github.com/Fission-AI/OpenSpec/blob/master/docs/opsx.md) — fuzzy→requirement exploration model.
-- [Codex Agent Skills](https://developers.openai.com/codex/skills) — Codex SKILL.md native support; skills live in `~/.codex/skills/<name>/` and require running Codex with `--enable skills`.
+- [Codex Agent Skills](https://developers.openai.com/codex/skills) — Codex SKILL.md native support; user skills live in `$HOME/.agents/skills/<name>/SKILL.md`; current docs do not require a `--enable skills` launch flag.
 - [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/skills/) — Gemini SKILL.md native support confirmation (`~/.gemini/skills/<name>/SKILL.md`).
 - [opencode Agent Skills](https://opencode.ai/docs/skills/) — opencode loads `<name>/SKILL.md` from `~/.config/opencode/skills/` and is Claude-skill-compatible (also reads `~/.claude/skills/`).
 - [Claude Code settings](https://docs.claude.com/en/docs/claude-code/settings) — `permissions.defaultMode = "bypassPermissions"` verified.
