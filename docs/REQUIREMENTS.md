@@ -36,7 +36,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - CLI: `install`, `uninstall`, `status`, `help`, `version`, `doctor`.
 - 4 platforms: Claude Code, Codex, opencode, Gemini (all full).
 - Manifest-backed install/uninstall safety (owned-only removal, ownership markers, atomic writes, symlink refusal).
-- Template + shared generation model adapted from `drfx`.
+- Template + shared generation model (`shared/` + templates + fragments), implemented in-repo.
 - The `requirements/` directory convention maintained by the two requirement skills.
 
 ### Out of Scope
@@ -85,23 +85,27 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 ---
 
-### 4.2 `xsk-bypass-claude` (distilled from `quick-set`)
+### 4.2 `xsk-bypass-claude`
 
-**Purpose**: Set Claude Code's current project to bypass permissions mode (auto-approve tools).
-
-**Distillation policy**:
-
-- **Promote**: the core logic — write `.claude/settings.json` with `permissions.defaultMode = "bypassPermissions"` (verified setting), and the governance guard that refuses when `permissions.disableBypassPermissionsMode === true` is set in either `settings.json` or `settings.local.json`.
-- `permissions.defaultMode = "bypassPermissions"` is verified against the Claude Code settings schema. The governance field `permissions.disableBypassPermissionsMode` is `UNCONFIRMED`: it is sourced from `quick-set` and not yet verified against official Claude Code documentation. **Residual risk**: if the field is named differently or absent, the governance guard is a no-op and the refusal safety property does not hold. Verify the exact field name against the authoritative Claude Code settings schema before relying on the guard.
-- **Do NOT promote**: `quick-set`'s CLI structure and platform-switching shell (it is a different tool). This skill is not a CLI wrapper; it instructs the agent to write the config directly.
+**Purpose**: Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.json`.
 
 **Triggers**: "bypass permissions", "跳过权限", "auto approve", "设置 bypassPermissions", "免确认".
 
 **Behavior**:
-1. Operate on the **current project directory** (`cwd`).
-2. Read `.claude/settings.json` and `.claude/settings.local.json`. If either has `permissions.disableBypassPermissionsMode: true` (`UNCONFIRMED` field — see distillation policy), refuse with a one-line reason and stop.
-3. Otherwise, set `permissions.defaultMode = "bypassPermissions"` in `.claude/settings.json` (create the file/dir if missing; preserve all existing fields; write with 2-space indent and trailing newline).
-4. Report the path written and the resulting JSON. No further action.
+1. Operate on the **current project directory** (`cwd`); the target is `.claude/settings.json`.
+2. If `.claude/settings.json` does not exist, create `.claude/` and write:
+   ```json
+   {
+     "permissions": {
+       "defaultMode": "bypassPermissions"
+     }
+   }
+   ```
+3. If it exists, merge in place: set `permissions.defaultMode = "bypassPermissions"`, preserving every other field. Write with 2-space indent and a trailing newline.
+4. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
+5. Report the path written and the resulting JSON. No further action.
+
+`permissions.defaultMode = "bypassPermissions"` is verified against the Claude Code settings schema (see §14); it is the only field this skill writes, and the skill reads only `.claude/settings.json` (not `settings.local.json`).
 
 **Targeting**: **Claude Code only.** The skill registry marks `platforms: [claude]`. `xsk install --platform codex|opencode|gemini` skips this skill.
 
@@ -113,10 +117,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 **Purpose**: Bring an agent-skill project up to the `xsk` standard (CLI + multi-platform install + manifest safety), or refuse if the target is not an agent-skill project.
 
-**Rule source**: `~/x-skills/skill-creator-rule` (3 docs: CLI commands, README format, platform skills) **updated** to:
-- add **opencode** as a fourth full platform (the source only covers Claude, Codex, Gemini),
-- remove the Gemini advisory-only constraint (Gemini is full, native SKILL.md),
-- replace the source's command-file install model (Claude `.md` command / Gemini `.toml`) with the uniform SKILL.md skill-directory model used by `xsk`.
+**Standard definition**: the canonical checklist below is defined in this document and self-owned (no external rule source to track or drift from). It covers four full platforms (Claude, Codex, opencode, Gemini) using one uniform SKILL.md skill-directory artifact, manifest-backed install safety, and a bilingual README.
 
 **Triggers**: "scaffold skill project", "make this a skill installer", "项目规范化", "agent 技能项目脚手架", "conform to skill standard".
 
@@ -145,7 +146,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - **Manifest-backed safety**: owned-only removal, ownership markers, atomic writes, symlink refusal (see §9).
 - **Bilingual README** with content-pinning tests.
 
-Invariant: running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The scaffold skill is validated by applying it to its own source project.
+Invariant: running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The machine-checkable portion of this invariant is enforced by the self-conformance test (§12); the remainder is the scaffold skill's judgment when applied to its own source project.
 
 **Platforms**: all 4, full.
 
@@ -213,7 +214,7 @@ created_at: <ISO date>
 
 ## 5. Architecture
 
-Adapt `drfx`'s proven machinery; do not rewrite from scratch.
+A zero-dependency Node CommonJS CLI. The install / manifest / generation layers are implemented in-repo and self-contained, following a verified 4-platform install pattern: per-platform home roots, atomic write via temp-sibling + `rename`, and owned-only manifest-backed uninstall.
 
 ```
 xsk/
@@ -227,7 +228,7 @@ xsk/
 │   ├── generator.js            # render SKILL.md from shared/ + templates/ + fragments/
 │   ├── capability.js           # (light) environment checks
 │   ├── status.js               # read-only manifest validation + per-platform report
-│   └── adapters/
+│   └── adapters/               # per-platform: skills-dir root + any frontmatter overrides (NOT capability probes)
 │       ├── claude.js
 │       ├── codex.js
 │       ├── opencode.js
@@ -250,7 +251,7 @@ xsk/
 └── README.zh-CN.md
 ```
 
-**Zero third-party runtime dependencies** (matches drfx). Tests use Node's built-in `node:test` and `assert`.
+**Zero third-party runtime dependencies.** Tests use Node's built-in `node:test` and `assert`.
 
 ---
 
@@ -263,13 +264,12 @@ xsk/
 | `install [--platform <list>]` | Generate and install skills. `--platform` optional, comma-separated, defaults to all 4. Reject unknown/duplicate platforms. |
 | `uninstall [--platform <list>]` | Remove manifest-owned generated files only. |
 | `status` | Read-only: report what is installed per platform; validate manifest shape. Supports `--json`. |
-| `doctor` | Probe environment: Node version, target-dir writability, manifest validity. Honestly reports `unverified` for runtime capabilities (does not fake capability proofs). |
+| `doctor` | Probe environment + manifest only: Node version, target-dir writability, manifest validity. Reports each check pass/fail. These are pure-instruction skills with no runtime capabilities, so `doctor` makes no capability claims. |
 
 Conventions:
 - `--platform` accepts `--platform=<list>` form too.
 - `--json` for machine-readable output on `status`/`doctor`.
 - Fail loud on unknown options.
-- An internal dispatcher (if any generated skill calls back into the CLI at runtime) stays **out of `help`**.
 
 ---
 
@@ -280,23 +280,24 @@ All 4 platforms are **full** and use the same `SKILL.md` skill-directory shape.
 | Platform | Install location (global) | Artifact |
 |---|---|---|
 | Claude Code | `~/.claude/skills/<name>/SKILL.md` | skill dir |
-| Codex | `~/.codex/skills/<name>/SKILL.md` | skill dir (embed shared/) |
+| Codex | `~/.codex/skills/<name>/SKILL.md` | skill dir |
 | opencode | `~/.config/opencode/skills/<name>/SKILL.md` | skill dir |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` | skill dir |
 
-- All auto-discover `**/SKILL.md`.
+- All four auto-discover skills from their skills dir; each skill is a `<name>/SKILL.md` folder (not arbitrary `**/SKILL.md` wildcard scanning).
 - Codex requires running with `--enable skills` to load skills (confirmed via Codex docs).
-- Gemini is **full** (native SKILL.md support, confirmed via Gemini CLI docs). No TOML, no advisory-only.
+- Gemini is **full**: native SKILL.md skill-directory support, auto-discovered from `~/.gemini/skills/` (confirmed via Gemini CLI docs). Same SKILL.md artifact as the other three platforms.
 - Frontmatter: `name` (lowercase, hyphenated, ≤64 chars, matches folder), `description` (required, covers what + when), `when_to_use`, `dispatch_intent`. Per-platform frontmatter overrides handled by the adapter if a platform requires specific fields.
 - `xsk-bypass-claude` installs to Claude only; other platforms skip it (`platforms: [claude]` in the registry).
+- opencode is Claude-skill-compatible: it also auto-loads `~/.claude/skills/`. `xsk` still installs opencode's copy under `~/.config/opencode/skills/` so each platform's install is independently owned and cleanly uninstallable. (A consequence: a Claude-only skill in `~/.claude/skills/` is also visible to opencode; `xsk-bypass-claude`'s body targets Claude settings and is inert elsewhere.)
 
 ---
 
 ## 8. Generation Model
 
-Adapted from drfx, simplified (one artifact shape across platforms):
+One artifact shape across all four platforms:
 
-- **`shared/`** — behavior text reused across skills and platforms. Single source of truth. Editing one file updates every generated skill.
+- **`shared/`** — behavior text reused across skills and platforms. Single source of truth. Editing one file updates every generated skill. It is inlined into every generated `SKILL.md` at build time; there is no runtime `shared/` directory under the user's home.
 - **`templates/skill.md.tmpl`** — the SKILL.md shell with `{{PLACEHOLDER}}` slots (frontmatter + body structure).
 - **`templates/fragments/<skill>.<section>.md`** — per-skill variant text the generator injects.
 - Rendering is `{{PLACEHOLDER}}` substitution. The generator emits one `<name>/SKILL.md` per (skill × platform), embedding the relevant `shared/` content and fragments, and writing to the platform's install location.
@@ -305,7 +306,19 @@ Adapted from drfx, simplified (one artifact shape across platforms):
 
 ## 9. Install Safety (Manifest-Backed)
 
-Installing into user home config dirs is destructive if careless. Required properties:
+Installing into user home config dirs is destructive if careless.
+
+`xsk` owns exactly one home directory, `~/.xsk/`:
+
+```
+~/.xsk/
+├── manifests/<platform>.manifest        # per-platform install record (JSON)
+└── install/backups/<platform>/          # pre-write originals, for atomic-write rollback and uninstall restore
+```
+
+Each manifest records: `schema_version`, `platform`, `version` (package version/provenance), `installed_at`, `installed_paths[]` (every file/dir created), and `backups[]` (each `{target, backup}` pair for a pre-existing user file that was displaced). `xsk` writes nowhere under the user's home except the platform skill dirs it installs into and `~/.xsk/` itself.
+
+Required properties:
 
 - **Write an install manifest** at `~/.xsk/manifests/<platform>.manifest` recording every file/dir created, plus version and provenance.
 - **Uninstall is owned-only.** Remove only paths in the manifest. Never delete a file `xsk` did not create.
@@ -314,7 +327,7 @@ Installing into user home config dirs is destructive if careless. Required prope
 - **Atomic writes.** Write to a staging path, then `rename` into place; on failure restore the original from backup.
 - **Preserve user edits.** If uninstall finds a generated file the user modified, keep it, report a *partial* uninstall, and retain a narrowed manifest so a later uninstall can finish.
 
-`status` validates the manifest **shape** (schema version, matching platform, required fields, expected collections), not merely parse success. A truncated-but-parseable manifest reports **invalid**, not "installed".
+`status` is read-only and reports one of `ok` / `drift` / `invalid` per platform. It validates the manifest **shape** (schema version, matching platform, required fields, expected collections), not merely parse success: a truncated-but-parseable manifest reports **invalid**, not "installed"; a manifest whose recorded paths no longer match what is on disk reports **drift**.
 
 ---
 
@@ -340,22 +353,23 @@ requirements/
 Each phase is independently deliverable; the system is usable after each.
 
 ### Phase 1 — Skeleton + install core + `xsk-think` (Claude)
-- Adapt from drfx: `lib/install.js`, `lib/manifest.js`, `lib/generator.js`, `lib/input.js`, `lib/adapters/claude.js`, `bin/xsk.js`.
+- Implement core in-repo: `lib/install.js`, `lib/manifest.js`, `lib/generator.js`, `lib/input.js`, `lib/adapters/claude.js`, `bin/xsk.js`.
 - New: `lib/skills.js` registry.
+- Project baseline (so Phase 1 self-conforms): `package.json` with required fields, `LICENSE`, bilingual `README.md` + `README.zh-CN.md`.
 - CLI: `version`, `help`, `install [--platform claude]`, `uninstall`, `status`.
 - `xsk-think` source + generation.
-- Tests: manifest safety, install/uninstall round-trip, golden snapshot of generated SKILL.md shell.
+- Tests: manifest safety, install/uninstall round-trip, golden snapshot of generated SKILL.md shell, README content-pinning, self-conformance floor (§12).
 - **Deliverable**: `xsk install` installs a working `xsk-think` into Claude Code.
 
 ### Phase 2 — `xsk-bypass-claude` + remaining 3 platforms
-- `xsk-bypass-claude` source + governance-guard logic (distilled from `quick-set`).
+- `xsk-bypass-claude` source (writes `.claude/settings.json` `permissions.defaultMode`).
 - Adapters: codex, opencode, gemini.
 - Golden snapshots per platform.
 - `doctor` command.
 - **Deliverable**: 2 skills × 4 platforms (bypass-claude on Claude only).
 
 ### Phase 3 — `xsk-skill-scaffold` + `xsk-write-req` + `xsk-archive-req`
-- `xsk-skill-scaffold` (updated skill-creator-rule, 4 platforms full).
+- `xsk-skill-scaffold` (4 platforms full).
 - `xsk-write-req` + `xsk-archive-req` + `requirements/` convention.
 - **Deliverable**: all 5 skills live.
 
@@ -373,6 +387,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 - Manifest round-trip tests (install → status valid → uninstall → clean).
 - Safety tests: owned-only removal, ownership-marker gating, symlink refusal, atomic-write rollback, user-edit preservation.
 - README content-pinning tests (commands/tokens present; EN/CN heading parity).
+- Self-conformance test: assert this repo satisfies the machine-checkable parts of the §4.3 standard — the five core CLI commands resolve, EN/CN README headings match, `lib/manifest.js` and `LICENSE` exist, and `package.json` carries the required fields. This is the executable floor under the §1 "audits to zero gaps" criterion; the full audit remains the scaffold skill's judgment.
 
 **Acceptance checks (manual)**:
 - `xsk install` then verify `~/.claude/skills/xsk-think/SKILL.md` exists and loads as a skill.
@@ -388,27 +403,24 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 |---|---|---|
 | D1 | Package `@xenonbyte/xsk`, binary `xsk`, prefix `xsk-` | matches npm scope; short; "X SKills" |
 | D2 | Skill names: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req` | user-defined |
-| D3 | Skill content language: English | matches Waza/drfx ecosystem; triggers are multilingual |
-| D4 | All 4 platforms full; Gemini is full (SKILL.md native) | user-verified environment; confirmed via Gemini CLI docs |
-| D5 | Adapt drfx `lib/` machinery, not rewrite | reuses proven install/manifest/generation iterations |
+| D3 | Skill content language: English | matches the Waza ecosystem; triggers are multilingual |
+| D4 | All 4 platforms full; uniform `<home>/skills/<name>/SKILL.md` | verified: Claude, Codex, Gemini, opencode all load `SKILL.md` skill directories (Gemini CLI + opencode skills docs); opencode is Claude-skill-compatible |
+| D5 | Self-contained zero-dep Node CJS; install/manifest/CLI modeled on a verified 4-platform install pattern, implemented in-repo | reuses a proven mechanism (per-platform homes, atomic write + `rename`, owned-only manifest uninstall, `ok`/`drift`/`invalid` status) without coupling the doc to an external source |
 | D6 | Requirement dir `requirements/`, archive gitignored | clear, version-controlled active docs |
 | D7 | `xsk-bypass-claude` is Claude-only | only sets Claude Code permissions |
-| D8 | `doctor` is light environment/manifest probing, reports `unverified` for runtime caps | honest; pure-instruction skills have no capability to prove |
+| D8 | `doctor` probes environment + manifest only (Node version, dir writability, manifest validity) | pure-instruction skills have no runtime capability to verify, so `doctor` makes no capability claims |
 
 ---
 
 ## 14. References
 
-- [`~/x-studio/document-review-fix`](file:///Users/xubo/x-studio/document-review-fix) — reference installer (install/manifest/generator/adapters, 4-platform). `drfx` is the working name for this project (npm package `@xenonbyte/drfx`, binary `drfx`); "`drfx` machinery" throughout this doc refers to it.
-- [`~/x-skills/skill-creator-rule`](file:///Users/xubo/x-skills/skill-creator-rule) — scaffold rule source (to be updated: add opencode, drop advisory-only, switch to SKILL.md skill-directory model).
-- [`~/x-skills/quick-set`](file:///Users/xubo/x-skills/quick-set) — bypassPermissions logic source (the `disableBypassPermissionsMode` governance field originates here; `UNCONFIRMED` against official Claude Code docs).
 - [tw93/Waza `/think`](https://github.com/tw93/Waza/blob/master/skills/think/SKILL.md) — think skill source.
 - [tw93/Waza `/write`](https://github.com/tw93/Waza/blob/master/skills/write/SKILL.md) — natural-writing style reference.
 - [Fission-AI/OpenSpec `/opsx:explore`](https://github.com/Fission-AI/OpenSpec/blob/master/docs/opsx.md) — fuzzy→requirement exploration model.
 - [Codex Agent Skills](https://developers.openai.com/codex/skills) — Codex SKILL.md native support; skills live in `~/.codex/skills/<name>/` and require running Codex with `--enable skills`.
 - [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/skills/) — Gemini SKILL.md native support confirmation (`~/.gemini/skills/<name>/SKILL.md`).
-- [opencode skill config](https://opencode.ai/config.json) — opencode skill loader + paths (`~/.config/opencode/skills/<name>/SKILL.md`, scans `**/SKILL.md`).
-- [Claude Code settings](https://docs.claude.com/en/docs/claude-code/settings) — `permissions.defaultMode` verified; `disableBypassPermissionsMode` `UNCONFIRMED`.
+- [opencode Agent Skills](https://opencode.ai/docs/skills/) — opencode loads `<name>/SKILL.md` from `~/.config/opencode/skills/` and is Claude-skill-compatible (also reads `~/.claude/skills/`).
+- [Claude Code settings](https://docs.claude.com/en/docs/claude-code/settings) — `permissions.defaultMode = "bypassPermissions"` verified.
 
 ---
 
