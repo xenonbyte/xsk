@@ -23,8 +23,8 @@ test('input: version variants', () => {
 });
 
 test('input: help/version flag shortcuts reject extra arguments', () => {
-  assert.throws(() => parse(['-v', 'extra']), /version/);
-  assert.throws(() => parse(['--help', 'extra']), /help/);
+  assert.throws(() => parse(['-v', 'extra']), /unknown option: extra/);
+  assert.throws(() => parse(['--help', 'extra']), /unknown option: extra/);
 });
 
 test('input: install/uninstall/status/doctor recognized with default platforms', () => {
@@ -94,10 +94,27 @@ test('input: --json flag parsed', () => {
   });
 });
 
-test('input: --json rejects commands that do not emit JSON', () => {
-  for (const cmd of ['install', 'uninstall', 'version', 'help']) {
-    assert.throws(() => parse([cmd, '--json']), /--json.*status.*doctor/);
-  }
+test('input: per-command option allow-lists reject not-allowed options', () => {
+  assert.throws(
+    () => parse(['version', '--platform', 'claude']),
+    /unknown or not-allowed option for version: --platform/,
+  );
+  assert.throws(
+    () => parse(['version', '--json']),
+    /unknown or not-allowed option for version: --json/,
+  );
+  assert.throws(
+    () => parse(['help', '--json']),
+    /unknown or not-allowed option for help: --json/,
+  );
+  assert.throws(
+    () => parse(['help', '--platform', 'claude']),
+    /unknown or not-allowed option for help: --platform/,
+  );
+  assert.throws(
+    () => parse(['install', '--json']),
+    /unknown or not-allowed option for install: --json/,
+  );
 });
 
 test('input: unknown option fails loud', () => {

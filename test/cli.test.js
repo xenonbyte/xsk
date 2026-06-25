@@ -68,6 +68,13 @@ test('cli: unknown option fails loud with non-zero exit', () => {
   assert.ok(/unknown/i.test(s.getErr()), 'error message on stderr');
 });
 
+test('cli: version rejects --platform with non-zero exit', () => {
+  const s = streams();
+  const code = main(['version', '--platform', 'claude'], { stdout: s.stdout, stderr: s.stderr });
+  assert.notStrictEqual(code, 0);
+  assert.match(s.getErr(), /xsk: unknown or not-allowed option for version: --platform/);
+});
+
 test('cli: install -> status -> uninstall round-trip via injected roots', () => {
   const opts = fixtureOpts();
 
