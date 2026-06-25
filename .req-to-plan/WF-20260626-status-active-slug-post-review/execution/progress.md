@@ -7,7 +7,7 @@ Execution BASE: 7592a575d789cc0c003d2f49d34b2183d348463c
 - [x] PLAN-TASK-001 Path-containment helper in lib/manifest.js
 - [x] PLAN-TASK-002 Thread skillsRoot through uninstall and refuse out-of-root
 - [x] PLAN-TASK-003 Backup restore-target containment in safeBackupForSkill
-- [ ] PLAN-TASK-004 status reports invalid (not drift/ok) on out-of-root paths
+- [x] PLAN-TASK-004 status reports invalid (not drift/ok) on out-of-root paths
 - [ ] PLAN-TASK-005 doctor forwards platformRoots and adds writable-xsk-root check
 - [ ] PLAN-TASK-006 Per-command option allow-lists in the parser
 - [ ] PLAN-TASK-007 xsk-archive-req atomicity, collision, invalid-slug
@@ -21,3 +21,4 @@ Execution BASE: 7592a575d789cc0c003d2f49d34b2183d348463c
 Task 1: complete (commits 7592a57..029835d, review clean)
 Task 2: complete (commits 6a020e1..f7ac201, review clean)
 Task 3: complete (commits b9473d4..8578747, review clean)
+Task 4: complete (commits 0a36833..e54be57, review clean)
