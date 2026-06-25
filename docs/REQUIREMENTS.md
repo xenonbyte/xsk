@@ -205,9 +205,11 @@ created_at: <ISO date>
 **Behavior**:
 1. Scan `requirements/*.md` (excluding `archive/`) for the doc with `status: active`.
 2. If none, refuse with a one-line reason and stop.
-3. Move the file to `requirements/archive/<slug>.md`.
-4. Update frontmatter: `status: archived`, add `archived_at: <ISO date>`. Preserve all other fields and body.
-5. After archiving, zero active docs remain. Report the archived path.
+3. Read the doc slug and validate it against `^[a-z0-9]+(-[a-z0-9]+)*$`. If the slug is missing/invalid, stop with the reason before any write.
+4. Check `requirements/archive/<slug>.md` before any write. If it already exists, stop, ask the user how to proceed, leave it unchanged, and write nothing.
+5. Write the fully updated archived file at `requirements/archive/<slug>.md`: set `status: archived`, add `archived_at: <ISO date>`, preserve all other frontmatter fields and the body unchanged.
+6. Confirm it landed, then remove the source active doc.
+7. After archiving, zero active docs remain. Report the archived path.
 
 **Platforms**: all 4, full.
 

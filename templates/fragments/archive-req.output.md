@@ -1,1 +1,1 @@
-The archived path (`requirements/archive/<slug>.md`), and confirmation that no active requirement docs remain.
+Either a one-line refusal that names the missing/invalid slug, a stop-and-ask response when `requirements/archive/<slug>.md` already exists and it was left unchanged, writing nothing, or the archived path (`requirements/archive/<slug>.md`) plus confirmation that it landed before the source active doc was removed and that no active requirement docs remain.

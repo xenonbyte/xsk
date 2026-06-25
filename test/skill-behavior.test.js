@@ -95,13 +95,31 @@ test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit,
   assert.ok(!/\u2013/.test(c), 'no en-dash');
 });
 
-test('skill-behavior: xsk-archive-req — archives active doc, zero active remain', () => {
+test('skill-behavior: xsk-archive-req — validates slug, stops on collision, writes before remove', () => {
   const c = body(skills.find((s) => s.name === 'xsk-archive-req'));
   assert.ok(/status: active/.test(c), 'scans for status: active');
+  assert.ok(/\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$/.test(c), 'pins the slug validation regex');
+  assert.ok(/missing\/invalid slug/i.test(c), 'refuses a missing or invalid slug');
+  assert.ok(/before any write/i.test(c), 'invalid slug stops before any write');
+  assert.ok(/requirements\/archive\/<slug>\.md/.test(c), 'uses the archive target path');
+  assert.ok(/already exists/i.test(c), 'detects archive collisions');
+  assert.ok(/ask the user/i.test(c), 'collision path asks the user');
+  assert.ok(/writing nothing/i.test(c), 'collision path does not write');
   assert.ok(/status: archived/.test(c), 'sets status: archived');
+  assert.ok(/archived_at/.test(c), 'adds archived_at');
   assert.ok(/requirements\/archive\//.test(c), 'moves to requirements/archive/');
   assert.ok(/归档需求/.test(c) && /archive requirement/i.test(c), 'multilingual triggers');
   assert.ok(/refuse/i.test(c), 'refuses when there is nothing to archive');
+  assert.ok(/confirm it landed/i.test(c), 'confirms the archive write landed');
+  assert.ok(/remove the source active doc/i.test(c), 'removes the source only after the archive write');
+
+  const collisionIndex = c.search(/already exists/i);
+  const writeIndex = c.search(/write the fully-updated archived content/i);
+  const removeIndex = c.search(/remove the source active doc/i);
+  assert.ok(collisionIndex >= 0 && writeIndex >= 0 && collisionIndex < writeIndex,
+    'checks collision before writing the archive');
+  assert.ok(writeIndex >= 0 && removeIndex >= 0 && writeIndex < removeIndex,
+    'writes and confirms the archive before removing the source');
 });
 
 test('skill-behavior: xsk-check — diff review, hard stops, evidence gate, verify, stop', () => {
