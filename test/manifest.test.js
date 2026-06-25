@@ -5,7 +5,16 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { SCHEMA_VERSION, validate, read, write, create, manifestPath, removeManifest } = require('../lib/manifest');
+const {
+  SCHEMA_VERSION,
+  validate,
+  validateOperationalSemantics,
+  read,
+  write,
+  create,
+  manifestPath,
+  removeManifest,
+} = require('../lib/manifest');
 
 function validManifest(overrides) {
   return Object.assign(
@@ -55,6 +64,42 @@ test('manifest: backups entries must have target and backup strings', () => {
   assert.strictEqual(validate(validManifest({ backups: [{ target: 'a' }] })), false);
   assert.strictEqual(validate(validManifest({ backups: [{ target: 1, backup: 2 }] })), false);
   assert.strictEqual(validate(validManifest({ backups: [{ target: 'a', backup: 'b' }] })), true);
+});
+
+test('manifest: operational semantics accept in-root installed paths', () => {
+  const skillsRoot = path.join('/tmp', 'x', '.claude', 'skills');
+  const manifest = validManifest({
+    installed_paths: [path.join(skillsRoot, 'xsk-think', 'SKILL.md')],
+  });
+
+  assert.deepStrictEqual(
+    validateOperationalSemantics({ platform: 'claude', skillsRoot, manifest }),
+    { valid: true },
+  );
+});
+
+test('manifest: operational semantics reject out-of-root installed paths', () => {
+  const skillsRoot = path.join('/tmp', 'x', '.claude', 'skills');
+  const manifest = validManifest({
+    installed_paths: [path.join('/tmp', 'x', '.claude', 'outside', 'SKILL.md')],
+  });
+
+  assert.deepStrictEqual(
+    validateOperationalSemantics({ platform: 'claude', skillsRoot, manifest }),
+    {
+      valid: false,
+      reason: `installed path escapes platform root: ${path.join('/tmp', 'x', '.claude', 'outside', 'SKILL.md')}`,
+    },
+  );
+});
+
+test('manifest: operational semantics accept empty installed paths', () => {
+  const skillsRoot = path.join('/tmp', 'x', '.claude', 'skills');
+
+  assert.deepStrictEqual(
+    validateOperationalSemantics({ platform: 'claude', skillsRoot, manifest: validManifest({ installed_paths: [] }) }),
+    { valid: true },
+  );
 });
 
 test('manifest: non-object / null is invalid', () => {
