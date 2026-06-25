@@ -87,6 +87,17 @@ test('input: --json flag parsed', () => {
     platforms: ALL,
     json: true,
   });
+  assert.deepStrictEqual(parse(['doctor', '--json']), {
+    command: 'doctor',
+    platforms: ALL,
+    json: true,
+  });
+});
+
+test('input: --json rejects commands that do not emit JSON', () => {
+  for (const cmd of ['install', 'uninstall', 'version', 'help']) {
+    assert.throws(() => parse([cmd, '--json']), /--json.*status.*doctor/);
+  }
 });
 
 test('input: unknown option fails loud', () => {

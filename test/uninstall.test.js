@@ -63,15 +63,36 @@ test('uninstall: owned-only removal leaves a third-party file at an unrecorded p
 test('uninstall: missing marker skips the dir (ownership gate)', () => {
   const sb = freshSandbox();
   installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
   const markerFile = path.join(sb.claudeRoot, 'xsk-think', MARKER);
   fs.rmSync(markerFile, { force: true }); // strip ownership
 
   const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
-  assert.ok(res.skipped.includes(path.join(sb.claudeRoot, 'xsk-think')), 'dir skipped');
-  assert.ok(
-    fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')),
-    'generated file left in place (not owned dir)',
-  );
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'missing marker is a partial uninstall');
+  assert.strictEqual(res.partial, true);
+  assert.ok(res.skipped.includes(skillDir), 'dir skipped');
+  assert.ok(fs.existsSync(skillFile), 'generated file left in place (not owned dir)');
+
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed, 'manifest kept for later status/uninstall');
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'narrowed manifest tracks retained file');
+});
+
+test('uninstall: does not remove a pre-existing empty skill directory that is not manifest-owned', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  fs.mkdirSync(skillDir, { recursive: true });
+  installOne(sb);
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing dir is not manifest-owned');
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, 0);
+  assert.ok(fs.existsSync(skillDir), 'pre-existing empty dir preserved');
+  assert.deepStrictEqual(fs.readdirSync(skillDir), [], 'generated files removed from preserved dir');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after generated files are gone');
 });
 
 test('uninstall: restores a displaced user file from backup when the generated file is unmodified', () => {

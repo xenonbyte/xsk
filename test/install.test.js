@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { install, installPlatform, PACKAGE_NAME, MARKER } = require('../lib/install');
+const { buildSkill } = require('../lib/generator');
 const { read, validate } = require('../lib/manifest');
 const { get } = require('../lib/skills');
 
@@ -144,6 +145,24 @@ test('install: re-install over an owned file does not create a new backup', () =
   install(opts);
   const manifest = read('claude', { xskRoot: sb.xskRoot });
   assert.deepStrictEqual(manifest.backups, [], 'second install creates no backup (file is owned)');
+});
+
+test('install: re-install refuses to overwrite a user-edited owned skill file', () => {
+  const sb = freshSandbox();
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
+  const edited = buildSkill(get('xsk-think')).content + '\n# USER EDIT\n';
+  fs.writeFileSync(skillFile, edited);
+
+  assert.throws(() => install(opts), /user-edited|drift/i);
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), edited, 'edited file preserved');
+  assert.deepStrictEqual(read('claude', { xskRoot: sb.xskRoot }).backups, [], 'no backup record added');
 });
 
 test('install: failed re-install rollback preserves a pre-existing owned install', () => {
