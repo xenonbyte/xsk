@@ -9,7 +9,7 @@ const { doctor, render: renderDoctor } = require('../lib/capability');
 
 const VERSION = require('../package.json').version;
 
-const HELP = `xsk ${VERSION} — agent skill aggregator
+const HELP = `xsk ${VERSION} - agent skill aggregator
 
 Usage:
   xsk <command> [options]
@@ -58,7 +58,7 @@ function formatUninstall(summary) {
       continue;
     }
     if (r.invalid) {
-      lines.push(`${platform}: manifest invalid — ${r.error}`);
+      lines.push(`${platform}: manifest invalid - ${r.error}`);
       continue;
     }
     const removedCount = (r.removed || []).filter((p) => p.endsWith('SKILL.md')).length;
@@ -120,9 +120,15 @@ function main(argv, options) {
       }
     }
     case 'uninstall': {
-      const summary = uninstall(
-        Object.assign({ platforms: parsed.platforms }, dispatchOptions),
-      );
+      let summary;
+      try {
+        summary = uninstall(
+          Object.assign({ platforms: parsed.platforms }, dispatchOptions),
+        );
+      } catch (e) {
+        err.write(`xsk uninstall failed: ${e.message}\n`);
+        return 1;
+      }
       out.write(formatUninstall(summary));
       return summary.exitCode;
     }

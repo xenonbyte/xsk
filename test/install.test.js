@@ -147,17 +147,19 @@ test('install: failed marker write does not leave stale generated files', () => 
   const skillDir = path.join(sb.claudeRoot, 'xsk-think');
   const skillFile = path.join(skillDir, 'SKILL.md');
   const markerFile = path.join(skillDir, MARKER);
-  const originalWriteFileSync = fs.writeFileSync;
+  const originalRenameSync = fs.renameSync;
   let injected = false;
   let installError = null;
 
-  fs.writeFileSync = function writeMarkerThenThrow(target, data, options) {
-    if (!injected && target === markerFile) {
+  // The marker is written through atomicWriteFile, whose final atomic step is
+  // fs.renameSync(tmp, markerFile). Failing that rename (after the skill file
+  // was already renamed into place) genuinely exercises the per-run rollback.
+  fs.renameSync = function failMarkerAtomicRename(src, dest) {
+    if (!injected && dest === markerFile) {
       injected = true;
-      originalWriteFileSync.call(fs, target, 'partial marker', options);
       throw new Error('simulated marker failure');
     }
-    return originalWriteFileSync.call(fs, target, data, options);
+    return originalRenameSync.call(fs, src, dest);
   };
 
   try {
@@ -170,7 +172,7 @@ test('install: failed marker write does not leave stale generated files', () => 
   } catch (e) {
     installError = e;
   } finally {
-    fs.writeFileSync = originalWriteFileSync;
+    fs.renameSync = originalRenameSync;
   }
 
   if (installError) {
