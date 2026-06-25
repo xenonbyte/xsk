@@ -1,0 +1,37 @@
+{
+  "name": "@xenonbyte/xsk",
+  "version": "0.1.0",
+  "description": "Agent skill aggregator. Install a curated set of agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed safety.",
+  "license": "MIT",
+  "bin": {
+    "xsk": "bin/xsk.js"
+  },
+  "main": "bin/xsk.js",
+  "scripts": {
+    "test": "node --test",
+    "syntaxcheck": "node scripts/syntaxcheck.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "skills/",
+    "shared/",
+    "templates/",
+    "docs/REQUIREMENTS.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "agent",
+    "skills",
+    "claude-code",
+    "codex",
+    "opencode",
+    "gemini",
+    "cli"
+  ]
+}

@@ -1,0 +1,1 @@
+Bring an agent-skill project up to the `xsk` standard, or refuse if the target is not an agent-skill project. The standard is self-owned and canonical: it lives in this skill, not in an external file that can drift.

@@ -1,0 +1,1 @@
+Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.json`. This is a Claude Code-only skill; it has no effect on Codex, opencode, or Gemini.
