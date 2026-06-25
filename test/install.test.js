@@ -887,7 +887,11 @@ test('install: full install + status + uninstall round-trip across all four plat
   const { uninstall } = require('../lib/uninstall');
 
   install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, xskRoot, skills: allSkills });
-  let status = computeStatus({ platforms: ['claude', 'codex', 'opencode', 'gemini'], xskRoot });
+  let status = computeStatus({
+    platforms: ['claude', 'codex', 'opencode', 'gemini'],
+    platformRoots: roots,
+    xskRoot,
+  });
   assert.strictEqual(status.platforms.claude.state, 'ok');
   assert.strictEqual(status.platforms.codex.state, 'ok');
   assert.strictEqual(status.platforms.opencode.state, 'ok');
@@ -902,7 +906,11 @@ test('install: full install + status + uninstall round-trip across all four plat
   for (const p of ['claude', 'codex', 'opencode', 'gemini']) {
     assert.ok(!fs.existsSync(path.join(roots[p], 'xsk-think')), `${p} skill dir removed`);
   }
-  status = computeStatus({ platforms: ['claude', 'codex', 'opencode', 'gemini'], xskRoot });
+  status = computeStatus({
+    platforms: ['claude', 'codex', 'opencode', 'gemini'],
+    platformRoots: roots,
+    xskRoot,
+  });
   for (const p of ['claude', 'codex', 'opencode', 'gemini']) {
     assert.strictEqual(status.platforms[p].state, 'not-installed');
   }

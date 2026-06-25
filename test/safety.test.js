@@ -34,13 +34,21 @@ function installClaude(sb, skillList) {
   });
 }
 
+function uninstallClaude(sb, claudeRoot) {
+  return uninstall({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot || sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+  });
+}
+
 test('safety: uninstall removes only manifest-owned paths; a third-party file survives', () => {
   const sb = sandbox();
   installClaude(sb, [get('xsk-think')]);
   const foreign = path.join(sb.claudeRoot, 'someone-else', 'SKILL.md');
   fs.mkdirSync(path.dirname(foreign), { recursive: true });
   fs.writeFileSync(foreign, 'not ours');
-  uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  uninstallClaude(sb);
   assert.ok(fs.existsSync(foreign), 'third-party file untouched');
 });
 
@@ -48,7 +56,7 @@ test('safety: ownership-marker gating — missing marker skips directory removal
   const sb = sandbox();
   installClaude(sb, [get('xsk-think')]);
   fs.rmSync(path.join(sb.claudeRoot, 'xsk-think', MARKER), { force: true });
-  uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  uninstallClaude(sb);
   assert.ok(fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')),
     'generated file left when ownership marker absent');
 });
@@ -61,7 +69,7 @@ test('safety: partial uninstall keeps ownership marker so owned dir removal can 
   const extraFile = path.join(skillDir, 'user-note.txt');
   fs.writeFileSync(extraFile, 'not owned by xsk');
 
-  const first = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const first = uninstallClaude(sb);
   assert.strictEqual(first.exitCode, 2, 'first uninstall is partial because the dir is not empty');
   assert.ok(fs.existsSync(markerFile), 'marker kept so a later uninstall can retry the owned dir');
   const partial = read('claude', { xskRoot: sb.xskRoot });
@@ -69,7 +77,7 @@ test('safety: partial uninstall keeps ownership marker so owned dir removal can 
   assert.ok(partial.installed_paths.includes(markerFile), 'narrowed manifest keeps the marker');
 
   fs.rmSync(extraFile, { force: true });
-  const second = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const second = uninstallClaude(sb);
   assert.strictEqual(second.exitCode, 0, 'retry completes after the extra file is removed');
   assert.ok(!fs.existsSync(skillDir), 'owned dir removed on retry');
   assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after retry completes');
@@ -85,7 +93,7 @@ test('safety: symlink refusal — a symlink skill dir is never removed or traver
   fs.rmSync(path.join(real, 'SKILL.md'), { force: true });
   fs.rmdirSync(real);
   fs.symlinkSync(elsewhere, real);
-  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const summary = uninstallClaude(sb);
   assert.ok(summary.platforms.claude.refused.includes(real), 'symlink reported as refused');
   assert.ok(fs.lstatSync(real).isSymbolicLink(), 'symlink left intact');
   assert.ok(fs.existsSync(elsewhere), 'link target untouched');
@@ -122,7 +130,7 @@ test('safety: uninstall refuses a symlink ancestor before reading the marker', (
 
   let summary;
   try {
-    summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+    summary = uninstallClaude(sb, path.join(link, 'skills'));
   } finally {
     fs.readFileSync = originalReadFileSync;
   }
@@ -163,7 +171,7 @@ test('safety: backup restoration — a displaced original is restored on uninsta
   installClaude(sb, [get('xsk-think')]);
   const manifest = read('claude', { xskRoot: sb.xskRoot });
   assert.strictEqual(manifest.backups.length, 1);
-  uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  uninstallClaude(sb);
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userOriginal,
     'user original restored byte-for-byte');
 });
@@ -173,7 +181,7 @@ test('safety: user-edit preservation — an edited generated file is retained wi
   installClaude(sb, [get('xsk-think')]);
   const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
   fs.writeFileSync(skillFile, fs.readFileSync(skillFile, 'utf8') + '\n# user note\n');
-  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const summary = uninstallClaude(sb);
   assert.strictEqual(summary.exitCode, 2, 'partial exit code');
   assert.ok(fs.existsSync(skillFile), 'edited file retained');
   const retained = read('claude', { xskRoot: sb.xskRoot });
@@ -184,10 +192,18 @@ test('safety: full install -> status valid -> uninstall -> clean (zero stale fix
   const sb = sandbox();
   const { computeStatus } = require('../lib/status');
   installClaude(sb, allSkills);
-  const status = computeStatus({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const status = computeStatus({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+  });
   assert.strictEqual(status.platforms.claude.state, 'ok');
-  uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
-  const after = computeStatus({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  uninstallClaude(sb);
+  const after = computeStatus({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+  });
   assert.strictEqual(after.platforms.claude.state, 'not-installed');
   // no stale generated files remain under the claude root
   const remaining = fs.existsSync(sb.claudeRoot) ? fs.readdirSync(sb.claudeRoot) : [];
