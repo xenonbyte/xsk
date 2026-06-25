@@ -305,6 +305,36 @@ test('doctor: manifest-valid check reflects a valid manifest', () => {
   assert.strictEqual(m.pass, true);
 });
 
+test('doctor: manifest-valid check fails when a recorded install path drifts', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(home, 'claude-skills', 'xsk-think', 'SKILL.md');
+  write('claude', create('claude', '0.1.0', { installed_paths: [skillFile] }), { xskRoot });
+
+  const result = doctor({ platforms: ['claude'], platformRoots: { claude: path.join(home, 'c') }, xskRoot });
+  const m = result.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(m.pass, false);
+  assert.match(m.detail, /drift/i);
+  assert.strictEqual(result.allPass, false);
+});
+
+test('doctor: manifest-valid check fails when a recorded backup drifts', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(home, 'claude-skills', 'xsk-think', 'SKILL.md');
+  const backup = path.join(home, '.xsk', 'install', 'backups', 'claude', 'xsk-think.SKILL.md.bak');
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [],
+    backups: [{ target: skillFile, backup }],
+  }), { xskRoot });
+
+  const result = doctor({ platforms: ['claude'], platformRoots: { claude: path.join(home, 'c') }, xskRoot });
+  const m = result.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(m.pass, false);
+  assert.match(m.detail, /drift/i);
+  assert.strictEqual(result.allPass, false);
+});
+
 test('doctor: manifest-valid check fails when a manifest is shape-invalid', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
   const xskRoot = path.join(home, '.xsk');

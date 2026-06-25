@@ -16,7 +16,7 @@ Two recurring frictions when working across multiple AI coding agents (Claude Co
 
 ### Goal
 
-Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills (2 distilled from third parties + 3 original) and installs them across Claude Code, Codex, opencode, and Gemini with manifest-backed safety. The project itself conforms to the same standard it ships (it is both an agent-skill project and the source of the scaffold skill that enforces the standard).
+Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills (2 distilled from third parties + 4 original) and installs them across Claude Code, Codex, opencode, and Gemini with manifest-backed safety. The project itself conforms to the same standard it ships (it is both an agent-skill project and the source of the scaffold skill that enforces the standard).
 
 ### Success Criteria
 
@@ -238,7 +238,8 @@ xsk/
 │   ├── bypass-claude/SKILL.md
 │   ├── skill-scaffold/SKILL.md
 │   ├── write-req/SKILL.md
-│   └── archive-req/SKILL.md
+│   ├── archive-req/SKILL.md
+│   └── check/SKILL.md
 ├── shared/                     # behavior shared across skills/platforms (single source of truth)
 ├── templates/
 │   ├── skill.md.tmpl           # the SKILL.md shell with {{PLACEHOLDER}} slots
@@ -264,7 +265,7 @@ xsk/
 | `install [--platform <list>]` | Generate and install skills. `--platform` optional, comma-separated, defaults to all 4. Reject unknown/duplicate platforms. |
 | `uninstall [--platform <list>]` | Remove manifest-owned generated files only. |
 | `status` | Read-only: report what is installed per platform; validate manifest shape. Supports `--json`. |
-| `doctor` | Probe environment + manifest only: Node version, target-dir writability, manifest validity. Reports each check pass/fail. These are pure-instruction skills with no runtime capabilities, so `doctor` makes no capability claims. |
+| `doctor` | Probe environment + manifest only: Node version, target-dir writability, manifest validity, and recorded-path drift (the `manifest-valid` check fails on `invalid` or `drift` state). Reports each check pass/fail. These are pure-instruction skills with no runtime capabilities, so `doctor` makes no capability claims. |
 
 Conventions:
 - `--platform` accepts `--platform=<list>` form too.
@@ -375,7 +376,7 @@ Each phase is independently deliverable; the system is usable after each.
 ### Phase 3 — `xsk-skill-scaffold` + `xsk-write-req` + `xsk-archive-req`
 - `xsk-skill-scaffold` (4 platforms full).
 - `xsk-write-req` + `xsk-archive-req` + `requirements/` convention.
-- **Deliverable**: all 5 original skills live.
+- **Deliverable**: all 5 pre-check skills live.
 
 ### Phase 4 — `xsk-check` (distilled from Waza `/check`)
 - `xsk-check` (4 platforms full): the default-review discipline as a single self-contained skill, dropping Waza's file-backed modes and parallel-specialist machinery.
@@ -416,7 +417,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 | D5 | Self-contained zero-dep Node CJS; install/manifest/CLI modeled on a verified 4-platform install pattern, implemented in-repo | reuses a proven mechanism (per-platform homes, atomic write + `rename`, owned-only manifest uninstall, `ok`/`drift`/`invalid` status) without coupling the doc to an external source |
 | D6 | Requirement dir `requirements/`, archive gitignored | clear, version-controlled active docs |
 | D7 | `xsk-bypass-claude` is Claude-only | only sets Claude Code permissions |
-| D8 | `doctor` probes environment + manifest only (Node version, dir writability, manifest validity) | pure-instruction skills have no runtime capability to verify, so `doctor` makes no capability claims |
+| D8 | `doctor` probes environment + manifest only (Node version, dir writability, manifest validity + recorded-path drift) | pure-instruction skills have no runtime capability to verify, so `doctor` makes no capability claims |
 
 ---
 
