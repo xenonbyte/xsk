@@ -577,7 +577,7 @@ test('install: re-install does not re-own a markerless retained skill directory'
   assert.strictEqual(manifest.backups.length, 1, 'markerless user content is backed up');
 
   const { uninstall } = require('../lib/uninstall');
-  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const summary = uninstall({ platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot });
   assert.strictEqual(summary.exitCode, 0);
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'markerless user content restored');
   assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
@@ -665,6 +665,37 @@ test('install: refuses to overwrite an invalid previous manifest', () => {
   assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'skill file not written');
 });
 
+test('install: refuses a previous manifest with an out-of-root installed path and leaves state untouched', () => {
+  const sb = freshSandbox();
+  const outsideDir = path.join(sb.home, 'outside-skill');
+  const outsideFile = path.join(outsideDir, 'SKILL.md');
+  fs.mkdirSync(outsideDir, { recursive: true });
+  fs.writeFileSync(outsideFile, 'outside content');
+
+  const { create, write } = require('../lib/manifest');
+  const manifest = create('claude', '0.1.0', {
+    installed_paths: [outsideFile],
+  });
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+  const manifestFile = path.join(sb.xskRoot, 'manifests', 'claude.manifest');
+  const before = fs.readFileSync(manifestFile, 'utf8');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /installed path escapes platform root|existing manifest is invalid/i,
+  );
+
+  assert.strictEqual(fs.readFileSync(outsideFile, 'utf8'), 'outside content', 'outside file untouched');
+  assert.strictEqual(fs.readFileSync(manifestFile, 'utf8'), before, 'manifest retained unchanged');
+  assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'skill file not written');
+});
+
 test('install: user-owned skill directories are not recorded or retained after uninstall restore', () => {
   const sb = freshSandbox();
   const skillDir = path.join(sb.claudeRoot, 'xsk-think');
@@ -684,7 +715,7 @@ test('install: user-owned skill directories are not recorded or retained after u
   assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing user directory is not owned');
 
   const { uninstall } = require('../lib/uninstall');
-  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const summary = uninstall({ platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot });
   assert.strictEqual(summary.exitCode, 0);
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored');
   assert.ok(!fs.existsSync(path.join(skillDir, MARKER)), 'ownership marker removed');
@@ -709,7 +740,7 @@ test('install: re-install does not convert a pre-existing user directory into ow
   assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing dir remains unowned after reinstall');
 
   const { uninstall } = require('../lib/uninstall');
-  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  const summary = uninstall({ platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot });
   assert.strictEqual(summary.exitCode, 0);
   assert.ok(fs.existsSync(skillDir), 'user-owned directory survives uninstall after reinstall');
   assert.deepStrictEqual(fs.readdirSync(skillDir), [], 'generated files removed from preserved user dir');
@@ -862,7 +893,11 @@ test('install: full install + status + uninstall round-trip across all four plat
   assert.strictEqual(status.platforms.opencode.state, 'ok');
   assert.strictEqual(status.platforms.gemini.state, 'ok');
 
-  const summary = uninstall({ platforms: ['claude', 'codex', 'opencode', 'gemini'], xskRoot });
+  const summary = uninstall({
+    platforms: ['claude', 'codex', 'opencode', 'gemini'],
+    platformRoots: roots,
+    xskRoot,
+  });
   assert.strictEqual(summary.exitCode, 0);
   for (const p of ['claude', 'codex', 'opencode', 'gemini']) {
     assert.ok(!fs.existsSync(path.join(roots[p], 'xsk-think')), `${p} skill dir removed`);
