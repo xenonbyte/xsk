@@ -15,7 +15,7 @@ Execution BASE: 7592a575d789cc0c003d2f49d34b2183d348463c
 - [x] PLAN-TASK-009 xsk-bypass-claude docs, READMEs, and D10
 - [x] PLAN-TASK-010 Single-active invariant guard in write-req and archive-req
 - [x] PLAN-TASK-011 README discovery-alias disclosure after the verification gate
-- [ ] PLAN-TASK-012 xsk-think output heading wording
+- [x] PLAN-TASK-012 xsk-think output heading wording
 - [ ] PLAN-TASK-013 Full verification sweep
 
 Task 1: complete (commits 7592a57..029835d, review clean)
@@ -29,3 +29,4 @@ Task 8: complete (commits b081caa..a82df72, review clean)
 Task 9: complete (commits 3e192ca..07adf40, review clean)
 Task 10: complete (commits 721fa62..fb52efe, review clean)
 Task 11: complete (commits d77de9d..3700c93, review clean)
+Task 12: complete (commits 126c1f3..7569a8a, review clean)
