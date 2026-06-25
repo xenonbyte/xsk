@@ -281,6 +281,44 @@ test('doctor: writable check passes for a creatable temp root', () => {
   assert.strictEqual(w.pass, true);
 });
 
+test('doctor: writable-xsk-root check fails when xskRoot is not writable', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const xskRoot = path.join(home, '.xsk');
+  fs.mkdirSync(xskRoot, { recursive: true });
+  fs.chmodSync(xskRoot, 0o555);
+  try {
+    const result = doctor({
+      platforms: ['claude'],
+      platformRoots: { claude: path.join(home, 'claude-skills') },
+      xskRoot,
+    });
+    const w = result.checks.find((c) => c.name === 'writable-xsk-root');
+    assert.ok(w);
+    assert.strictEqual(w.pass, false);
+    assert.strictEqual(result.allPass, false);
+  } finally {
+    fs.chmodSync(xskRoot, 0o755);
+  }
+});
+
+test('doctor: writable-xsk-root check fails when xskRoot is a symlink', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const outside = path.join(home, 'outside-xsk');
+  const xskRoot = path.join(home, '.xsk');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.symlinkSync(outside, xskRoot);
+
+  const result = doctor({
+    platforms: ['claude'],
+    platformRoots: { claude: path.join(home, 'claude-skills') },
+    xskRoot,
+  });
+  const w = result.checks.find((c) => c.name === 'writable-xsk-root');
+  assert.ok(w);
+  assert.strictEqual(w.pass, false);
+  assert.strictEqual(result.allPass, false);
+});
+
 test('doctor: writable check fails when an ancestor is a regular file', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
   const blocker = path.join(home, 'not-a-dir');
@@ -363,6 +401,22 @@ test('doctor: manifest-valid check fails when a manifest is shape-invalid', () =
   assert.strictEqual(result.allPass, false);
 });
 
+test('doctor: manifest-valid check fails when a recorded install path escapes the injected platform root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const xskRoot = path.join(home, '.xsk');
+  const claudeRoot = path.join(home, 'claude-skills');
+  const escapedPath = path.join(home, 'outside', 'xsk-think', 'SKILL.md');
+  fs.mkdirSync(path.dirname(escapedPath), { recursive: true });
+  fs.writeFileSync(escapedPath, 'escaped skill');
+  write('claude', create('claude', '0.1.0', { installed_paths: [escapedPath] }), { xskRoot });
+
+  const result = doctor({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+  const m = result.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(m.pass, false);
+  assert.match(m.detail, /invalid/i);
+  assert.strictEqual(result.allPass, false);
+});
+
 test('doctor: manifest-valid checks the default manifest root when xskRoot is omitted', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-default-'));
   const mock = test.mock.method(os, 'homedir', () => home);
@@ -385,4 +439,5 @@ test('doctor: render json parses and includes checks', () => {
   const { render } = require('../lib/capability');
   const parsed = JSON.parse(render(result, { json: true }));
   assert.ok(Array.isArray(parsed.checks) && parsed.checks.length > 0);
+  assert.ok(parsed.checks.some((c) => c.name === 'writable-xsk-root'));
 });
