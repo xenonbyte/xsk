@@ -57,7 +57,8 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
   assert.ok(/decision-complete plan/.test(c), 'purpose stated');
   assert.ok(/出方案/.test(c) && /plan this/.test(c), 'multilingual triggers present');
   assert.ok(/explicit approval/.test(c), 'approval gate');
-  assert.ok(/Approved Design Summary/.test(c), 'output is an Approved Design Summary');
+  assert.ok(/Proposed Design Summary/.test(c), 'output is a Proposed Design Summary');
+  assert.ok(!/Approved Design Summary/.test(c), 'output does not use Approved Design Summary');
   assert.ok(/stop/i.test(c) && /wait for approval/.test(c), 'stops and waits');
 });
 

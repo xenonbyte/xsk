@@ -1,4 +1,4 @@
-An **Approved Design Summary** with these parts:
+A **Proposed Design Summary** with these parts:
 
 - The recommended approach, with rationale.
 - The premise-collapse assumption, if there is one.
