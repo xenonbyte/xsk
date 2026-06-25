@@ -47,6 +47,7 @@ Files:
 - lib/uninstall.js
 - lib/install.js
 - test/uninstall.test.js
+- test/install.test.js
 Skeleton:
 ```js
 // lib/uninstall.js
@@ -71,9 +72,10 @@ const reset = uninstallPlatform({ platform, xskRoot, skillsRoot });
 Steps:
 - [ ] In uninstall(), lazy-require rootFor, resolve skillsRoot per platform, and pass it into uninstallPlatform.
 - [ ] In uninstallPlatform, after shape validate(), run validateOperationalSemantics; on invalid return the existing invalid shape (remove nothing, retain manifest, FAILURE_EXIT).
-- [ ] Update the install() reset call site at lib/install.js:424 to pass the already-resolved skillsRoot.
+- [ ] Update the install() reset call site at lib/install.js:424 to pass the already-resolved skillsRoot. install() already throws on `reset.invalid` and rolls back via its catch/snapshot path, so the install side needs only this skillsRoot thread (no new abort/rollback logic).
 - [ ] Add a test: shape-valid manifest with one out-of-root installed_path makes uninstall refuse, leaves the file untouched, retains the manifest (inject platformRoots + xskRoot).
-Verification: `node --test test/uninstall.test.js` passes the out-of-root refusal test and `node --test test/install.test.js` stays green.
+- [ ] Add a `test/install.test.js` case where install encounters a prior shape-valid manifest with an out-of-root `installed_paths` entry, the uninstall-first reset refuses, install rolls back any attempted install work, the manifest is retained, and nothing is written outside the platform root (inject platformRoots + xskRoot).
+Verification: `node --test test/uninstall.test.js test/install.test.js` passes the uninstall refusal case, the install reset rollback case, and existing install coverage.
 
 ### PLAN-TASK-003 Backup restore-target containment in safeBackupForSkill
 Scope: SCOPE-IN-001
@@ -288,12 +290,14 @@ Files:
 Skeleton:
 ```text
 Verification gate first: re-verify that opencode reads ~/.claude/skills and ~/.agents/skills and that Gemini reads ~/.agents/skills against current official docs (Context7 or web). If a fact moved, update the copy and docs sections 7 and 14.
+If current official docs cannot be verified, stop before writing README copy, mark the fact UNCONFIRMED, and record the blocker.
 Then add a "Discovery aliases and duplicate skills" section to README.md and README.zh-CN.md with identical headings and English literals preserved.
 ```
 Steps:
-- [ ] Run the R-H1 verification gate against the current official opencode and Gemini docs; update docs sections 7 and 14 if the facts moved.
+- [ ] Run the R-H1 verification gate against the current official opencode and Gemini docs; update docs sections 7 and 14 if the facts moved, and record the source, date, and outcome in docs section 14 (References) or the PR/commit description.
+- [ ] If current official docs cannot be verified, stop before writing README copy, mark the discovery-alias facts UNCONFIRMED, and report the blocked gate instead of guessing.
 - [ ] Add the discovery-alias section to README.md and README.zh-CN.md with identical headings and English literals preserved (alias reads, cross-platform visibility, per-platform owned independently-uninstallable copy, bypass inert off Claude Code).
-Verification: `node --test test/readme-pinning.test.js` passes (EN/CN heading parity) and both READMEs contain the new section.
+Verification: R-H1 verification has a recorded source/date/outcome (or the task stops with UNCONFIRMED before README edits); `node --test test/readme-pinning.test.js` passes (EN/CN heading parity) and both READMEs contain the new section.
 
 ### PLAN-TASK-012 xsk-think output heading wording
 Scope: SCOPE-IN-008
