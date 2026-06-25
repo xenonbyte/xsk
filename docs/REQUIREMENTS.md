@@ -144,6 +144,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 - **Platforms**: Claude Code, Codex, opencode, Gemini — all 4 full (see §7).
 - **Generation model**: `shared/` + `templates/` + `fragments/` (see §8).
 - **Manifest-backed safety**: owned-only removal, ownership markers, atomic writes, symlink refusal (see §9).
+- **Uninstall-first install**: a reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed; user-edited owned files are still refused and rolled back, never destroyed.
 - **Bilingual README** with content-pinning tests.
 
 Release invariant: before `xsk` is considered complete, running `xsk-skill-scaffold` against this repo MUST audit to zero gaps. The machine-checkable portion of this invariant is enforced by the self-conformance test (§12); the remainder is the scaffold skill's judgment when applied to its own source project.
@@ -262,7 +263,7 @@ xsk/
 |---|---|
 | `version` | Print package version. Also `--version` / `-v`. |
 | `help` | Print user command list. Also `--help` / `-h`, and on no-args. |
-| `install [--platform <list>]` | Generate and install skills. `--platform` optional, comma-separated, defaults to all 4. Reject unknown/duplicate platforms. |
+| `install [--platform <list>]` | Generate and install skills, uninstall-first: a reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed; it still refuses to overwrite a user-edited owned file and rolls back. `--platform` optional, comma-separated, defaults to all 4. Reject unknown/duplicate platforms. |
 | `uninstall [--platform <list>]` | Remove manifest-owned generated files only. |
 | `status` | Read-only: report what is installed per platform; validate manifest shape. Supports `--json`. |
 | `doctor` | Probe environment + manifest only: Node version, target-dir writability, manifest validity, and recorded-path drift (the `manifest-valid` check fails on `invalid` or `drift` state). Reports each check pass/fail. These are pure-instruction skills with no runtime capabilities, so `doctor` makes no capability claims. |
@@ -418,6 +419,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 | D6 | Requirement dir `requirements/`, archive gitignored | clear, version-controlled active docs |
 | D7 | `xsk-bypass-claude` is Claude-only | only sets Claude Code permissions |
 | D8 | `doctor` probes environment + manifest only (Node version, dir writability, manifest validity + recorded-path drift) | pure-instruction skills have no runtime capability to verify, so `doctor` makes no capability claims |
+| D9 | `install` is uninstall-first by default (no opt-out flag) | a reinstall should reach a clean state with no manual `uninstall` and no orphaned skills; the reset reuses the tested owned-only uninstall and rolls back rather than destroying user-edited files. Implemented by routing install through `uninstallPlatform` before regenerating; `MARKER`/`PACKAGE_NAME` + ownership predicates live in `lib/ownership.js` so this introduces no install/uninstall require cycle |
 
 ---
 

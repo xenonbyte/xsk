@@ -80,6 +80,7 @@ test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuse
   assert.ok(/Propose/.test(c), 'propose step');
   assert.ok(/Apply on approval/.test(c), 'apply on approval');
   assert.ok(/Manifest-backed/.test(c), 'standard includes manifest safety');
+  assert.ok(/uninstall-first/i.test(c), 'standard includes uninstall-first install');
   assert.ok(/项目规范化/.test(c), 'multilingual triggers');
 });
 

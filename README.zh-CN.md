@@ -37,7 +37,7 @@ xsk help
 |---|---|
 | `version`（亦作 `--version` / `-v`） | 打印 package version。 |
 | `help`（亦作 `--help` / `-h`，无参数时同样触发） | 打印用户命令清单。 |
-| `install [--platform <list>]` | 生成并安装 skill。`--platform` 以逗号分隔，缺省为全部四个平台；未知或重复的值会被拒绝。 |
+| `install [--platform <list>]` | 生成并安装 skill，默认 uninstall-first：重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`；用户改过的 owned 文件仍会被拒绝并回滚。`--platform` 以逗号分隔，缺省为全部四个平台；未知或重复的值会被拒绝。 |
 | `uninstall [--platform <list>]` | 仅移除 manifest 记录的生成文件。 |
 | `status [--json]` | 每个平台的只读报告：`ok`、`drift` 或 `invalid`。校验 manifest 形状，而非仅判断能否解析。 |
 | `doctor [--json]` | 对 Node 版本、目标目录可写性、manifest 有效性做只读探测；逐项给出 pass/fail，不声明任何能力。 |

@@ -437,17 +437,21 @@ test('install: rollback restore refuses a swapped symlink target', () => {
   let swapped = false;
   let failedSecondSkill = false;
 
-  fs.mkdirSync = function swapDuringRollback(target, options) {
-    if (!failedSecondSkill && target === failingDir && !new Error().stack.includes('rollback')) {
+  // Under uninstall-first the transactional rollback runs through
+  // restorePlatformSnapshot/restorePathState, so key the injection on the
+  // "restore" frame rather than installPlatform's internal "rollback".
+  fs.mkdirSync = function swapDuringRestore(target, options) {
+    if (!failedSecondSkill && target === failingDir && !new Error().stack.includes('restore')) {
       failedSecondSkill = true;
       throw new Error('simulated second skill failure');
     }
-    if (!swapped && target === skillDir && new Error().stack.includes('rollback')) {
+    const result = originalMkdirSync.call(fs, target, options);
+    if (!swapped && target === skillDir && new Error().stack.includes('restore')) {
       swapped = true;
       fs.rmSync(skillFile, { force: true });
       fs.symlinkSync(victim, skillFile);
     }
-    return originalMkdirSync.call(fs, target, options);
+    return result;
   };
 
   try {
@@ -547,6 +551,95 @@ test('install: re-install with a missing marker refuses to discard edited skill 
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), edited);
   assert.strictEqual(fs.readFileSync(backup, 'utf8'), userContent);
   assert.deepStrictEqual(read('claude', { xskRoot: sb.xskRoot }), firstManifest);
+});
+
+test('install: re-install does not re-own a markerless retained skill directory', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+
+  install(opts);
+  fs.rmSync(markerFile);
+  const userContent = '---\nname: xsk-think\ndescription: user-owned after marker loss\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  install(opts);
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'markerless retained dir is not re-owned');
+  assert.strictEqual(manifest.backups.length, 1, 'markerless user content is backed up');
+
+  const { uninstall } = require('../lib/uninstall');
+  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  assert.strictEqual(summary.exitCode, 0);
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'markerless user content restored');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after clean uninstall');
+});
+
+test('install: uninstall-first prunes a previously-owned skill no longer in the install set', () => {
+  const sb = freshSandbox();
+  const base = { platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot };
+  install(Object.assign({ skills: [get('xsk-think'), get('xsk-write-req')] }, base));
+  const wrDir = path.join(sb.claudeRoot, 'xsk-write-req');
+  assert.ok(fs.existsSync(path.join(wrDir, 'SKILL.md')), 'both skills installed initially');
+
+  // Reinstall with only one skill (as if xsk-write-req left the catalog). The
+  // dropped skill must be pruned by uninstall-first, not left orphaned.
+  install(Object.assign({ skills: [get('xsk-think')] }, base));
+
+  assert.ok(fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'retained skill still installed');
+  assert.ok(!fs.existsSync(wrDir), 'dropped skill pruned (no orphan left on disk)');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(
+    !manifest.installed_paths.some((p) => p.includes('xsk-write-req')),
+    'manifest no longer references the pruned skill',
+  );
+});
+
+test('install: uninstall-first restores a displaced user backup when pruning a dropped skill', () => {
+  const sb = freshSandbox();
+  const wrDir = path.join(sb.claudeRoot, 'xsk-write-req');
+  const wrFile = path.join(wrDir, 'SKILL.md');
+  fs.mkdirSync(wrDir, { recursive: true });
+  const userContent = '---\nname: xsk-write-req\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(wrFile, userContent);
+  const base = { platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot };
+
+  install(Object.assign({ skills: [get('xsk-think'), get('xsk-write-req')] }, base));
+  assert.notStrictEqual(fs.readFileSync(wrFile, 'utf8'), userContent, 'user file displaced by generated content');
+
+  // Dropping xsk-write-req must prune it AND restore the user's original file.
+  install(Object.assign({ skills: [get('xsk-think')] }, base));
+  assert.strictEqual(fs.readFileSync(wrFile, 'utf8'), userContent, 'user file restored when the dropped skill is pruned');
+});
+
+test('install: a plain reinstall is idempotent and keeps the manifest correct', () => {
+  const sb = freshSandbox();
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const first = read('claude', { xskRoot: sb.xskRoot });
+  install(opts);
+  const second = read('claude', { xskRoot: sb.xskRoot });
+
+  assert.deepStrictEqual(second.installed_paths.slice().sort(), first.installed_paths.slice().sort(), 'reinstall keeps the same owned paths');
+  assert.strictEqual(
+    fs.readFileSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md'), 'utf8'),
+    buildSkill(get('xsk-think')).content,
+    'reinstall regenerates canonical content',
+  );
 });
 
 test('install: refuses to overwrite an invalid previous manifest', () => {

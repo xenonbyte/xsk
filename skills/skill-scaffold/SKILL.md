@@ -34,6 +34,7 @@ Match the intent, not the exact words. Common cues:
 - Removed or renamed commands leave no stale references (grep-clean across CLI, help, README, generated text, `AGENTS.md`, `CLAUDE.md`).
 - Four platforms, all full: Claude Code, Codex, opencode, Gemini.
 - Manifest-backed install safety: owned-only removal, ownership markers, atomic writes, symlink refusal.
+- `install` is uninstall-first: a reinstall resets the previously-owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed. It still refuses to overwrite a user-edited owned file and rolls back instead of destroying it.
 - A golden snapshot of the generated skill shell, masking embedded `shared/` body.
 - A bilingual README (`README.md` plus `README.zh-CN.md`) with identical headings, English literals preserved, and content-pinning tests.
 

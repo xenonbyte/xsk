@@ -15,8 +15,10 @@ Usage:
   xsk <command> [options]
 
 Commands:
-  install [--platform <list>]   Generate and install skills. --platform is comma-
-                               separated, defaults to all four platforms.
+  install [--platform <list>]   Generate and install skills (uninstall-first: a
+                               reinstall resets prior owned files, no manual
+                               uninstall needed). --platform is comma-separated,
+                               defaults to all four platforms.
   uninstall [--platform <list>] Remove only the manifest-recorded generated files.
   status [--json]               Read-only per-platform report: ok, drift, invalid,
                                or not-installed.

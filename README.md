@@ -37,7 +37,7 @@ xsk help
 |---|---|
 | `version` (also `--version` / `-v`) | Print the package version. |
 | `help` (also `--help` / `-h`, and on no args) | Print the user command list. |
-| `install [--platform <list>]` | Generate and install skills. `--platform` is comma-separated, defaults to all four platforms. Unknown or duplicate values are rejected. |
+| `install [--platform <list>]` | Generate and install skills, uninstall-first: a reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed; user-edited owned files are still refused and rolled back. `--platform` is comma-separated, defaults to all four platforms. Unknown or duplicate values are rejected. |
 | `uninstall [--platform <list>]` | Remove only the manifest-recorded generated files. |
 | `status [--json]` | Read-only per-platform report: `ok`, `drift`, or `invalid`. Validates manifest shape, not just parse success. |
 | `doctor [--json]` | Read-only probe of Node version, target-dir writability, and manifest validity. Pass/fail per check. No capability claims. |
