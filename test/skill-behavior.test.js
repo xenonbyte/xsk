@@ -91,6 +91,13 @@ test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuse
 test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit, no em/en dash', () => {
   const c = body(skills.find((s) => s.name === 'xsk-write-req'));
   assert.ok(/Read the project first/.test(c), 'grounds in the project');
+  assert.ok(/There is \*\*at most one\*\* active doc at a time/.test(c), 'retains the single-active invariant');
+  assert.ok(/If more than one exists, stop/.test(c), 'stops when more than one active doc exists');
+  assert.ok(/list the offending paths/i.test(c), 'lists offending active-doc paths');
+  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
+  assert.ok(/user to resolve/i.test(c), 'leaves resolution to the user');
+  assert.ok(!/multi-active workflow/i.test(c), 'does not introduce a multi-active workflow');
+  assert.ok(!/auto-resolution/i.test(c), 'does not introduce auto-resolution');
   assert.ok(/decision points go to the user/i.test(c), 'asks user on decisions');
   assert.ok(/Self-audit checkpoint/.test(c), 'self-audit checkpoint');
   assert.ok(/Conflict check/.test(c) && /Ambiguity check/.test(c), 'conflict + ambiguity checks');
@@ -102,6 +109,13 @@ test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit,
 test('skill-behavior: xsk-archive-req — validates slug, stops on collision, writes before remove', () => {
   const c = body(skills.find((s) => s.name === 'xsk-archive-req'));
   assert.ok(/status: active/.test(c), 'scans for status: active');
+  assert.ok(/single document whose frontmatter has `status: active`/.test(c), 'retains the single-active language');
+  assert.ok(/If more than one exists, stop/.test(c), 'stops when more than one active doc exists');
+  assert.ok(/list the offending paths/i.test(c), 'lists offending active-doc paths');
+  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
+  assert.ok(/user to resolve/i.test(c), 'leaves resolution to the user');
+  assert.ok(!/multi-active workflow/i.test(c), 'does not introduce a multi-active workflow');
+  assert.ok(!/auto-resolution/i.test(c), 'does not introduce auto-resolution');
   assert.ok(/\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$/.test(c), 'pins the slug validation regex');
   assert.ok(/missing\/invalid slug/i.test(c), 'refuses a missing or invalid slug');
   assert.ok(/before any write/i.test(c), 'invalid slug stops before any write');

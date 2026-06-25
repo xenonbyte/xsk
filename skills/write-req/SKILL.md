@@ -19,7 +19,7 @@ Match the intent, not the exact words. Common cues:
 
 **1. Read the project first.** `grep` and `read` the current project structure, config files (`package.json` and the like), and relevant code to ground the requirement in reality. Never quote defaults from memory.
 
-**2. Locate or create the active requirement doc.** Scan `requirements/*.md` for frontmatter `status: active`. There is **at most one** active doc at a time. If one exists, lock onto it and append or refine. If none exists, create `requirements/<slug>.md` with `status: active` and a slug generated from the need.
+**2. Locate or create the active requirement doc.** Scan `requirements/*.md` for frontmatter `status: active`. There is **at most one** active doc at a time. If more than one exists, stop, list the offending paths, and report the broken invariant for the user to resolve. If one exists, lock onto it and append or refine. If none exists, create `requirements/<slug>.md` with `status: active` and a slug generated from the need.
 
 **3. Ensure the directory convention.** Auto-create `requirements/.gitignore` containing `archive/` if it is absent (creating `requirements/` and `requirements/archive/` as needed). Never overwrite an existing `.gitignore`; append `archive/` only if the line is missing.
 

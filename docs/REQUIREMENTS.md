@@ -167,6 +167,7 @@ Release invariant: before `xsk` is considered complete, running `xsk-skill-scaff
 **Behavior**:
 1. **Read the project first.** `grep`/`read` the current project structure, config files (`package.json`, etc.), and relevant code to ground the requirement in reality. Never quote defaults from memory.
 2. **Locate or create the active requirement doc.** Scan `requirements/*.md` for frontmatter `status: active`. There is **at most one** active doc at a time.
+   - If more than one exists, stop, list the offending paths, and report the broken invariant for the user to resolve.
    - If one exists, lock onto it (append/refine).
    - If none, create `requirements/<slug>.md` with `status: active` and a generated slug from the need.
 3. **Ensure the directory convention.** Auto-create `requirements/.gitignore` containing `archive/` if absent (create `requirements/` and `requirements/archive/` as needed). Never overwrite an existing `.gitignore`; append `archive/` if missing.
@@ -203,7 +204,7 @@ created_at: <ISO date>
 **Triggers**: "归档需求", "archive requirement", "需求归档", "把这个需求存档".
 
 **Behavior**:
-1. Scan `requirements/*.md` (excluding `archive/`) for the doc with `status: active`.
+1. Scan `requirements/*.md` (excluding `archive/`) for the single doc with `status: active`. If more than one exists, stop, list the offending paths, and report the broken invariant for the user to resolve.
 2. If none, refuse with a one-line reason and stop.
 3. Read the doc slug and validate it against `^[a-z0-9]+(-[a-z0-9]+)*$`. If the slug is missing/invalid, stop with the reason before any write.
 4. Check `requirements/archive/<slug>.md` before any write. If it already exists, stop, ask the user how to proceed, leave it unchanged, and write nothing.
@@ -352,6 +353,7 @@ requirements/
 
 - `.gitignore` content: `archive/` (directory pattern).
 - Active-doc invariant: at most one `requirements/*.md` (excluding `archive/`) has frontmatter `status: active` at any time.
+- If that invariant is broken, `xsk-write-req` and `xsk-archive-req` stop, list the offending paths, and leave resolution to the user.
 - `xsk-write-req` locks the active doc or creates a new one; `xsk-archive-req` archives it (active count returns to zero).
 
 ---
