@@ -60,3 +60,20 @@ test('golden: the shared body is fully masked exactly once per skill', () => {
     assert.ok(!shell.includes(sharedFirstLine), `${skill.name} shared heading fully masked away`);
   }
 });
+
+test('golden: committed skills/<base>/SKILL.md matches buildSkill output (packed source stays in sync)', () => {
+  // The masked golden fixtures are excluded from the npm package; the file that
+  // actually ships is skills/<fragmentBase>/SKILL.md. The golden tests above do
+  // not see it, so assert it byte-matches the generator here. A failure means a
+  // fragment changed without regenerating the committed source copy.
+  for (const skill of skills) {
+    const sourcePath = path.join(ROOT, 'skills', skill.fragmentBase, 'SKILL.md');
+    assert.ok(fs.existsSync(sourcePath), `source SKILL.md committed for ${skill.name}`);
+    const onDisk = fs.readFileSync(sourcePath, 'utf8');
+    assert.strictEqual(
+      onDisk,
+      buildSkill(skill).content,
+      `${skill.name}: skills/${skill.fragmentBase}/SKILL.md is stale; regenerate it from the fragments`,
+    );
+  }
+});

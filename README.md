@@ -6,7 +6,7 @@ Package: `@xenonbyte/xsk` · Binary: `xsk` · Runtime: Node >= 20, CommonJS, zer
 
 ## Overview
 
-Two recurring frictions when working across AI coding agents: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships five curated skills (two distilled from third parties, three original) and a CLI that installs each skill into every supported platform's skill directory, then tracks exactly what it created so uninstall removes only those files.
+Two recurring frictions when working across AI coding agents: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships six curated skills (two distilled from third parties, four original) and a CLI that installs each skill into every supported platform's skill directory, then tracks exactly what it created so uninstall removes only those files.
 
 `xsk` is itself an agent-skill project and conforms to the same standard its scaffold skill enforces.
 
@@ -46,7 +46,7 @@ Unknown options fail loud with a non-zero exit.
 
 ## Skills
 
-Five skills, prefixed `xsk-`:
+Six skills, prefixed `xsk-`:
 
 | Skill | Purpose |
 |---|---|
@@ -55,6 +55,7 @@ Five skills, prefixed `xsk-`:
 | `xsk-skill-scaffold` | Bring an agent-skill project up to the `xsk` standard, or refuse if it is not one. |
 | `xsk-write-req` | Convert plain-language needs into a compliant requirement doc in `requirements/`, grounded in the current project. |
 | `xsk-archive-req` | Archive the active requirement doc into `requirements/archive/`. |
+| `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
 
 `xsk-bypass-claude` targets Claude Code only; `xsk install` skips it on the other three platforms.
 

@@ -22,7 +22,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 - `xsk install` installs every applicable skill into every target platform's skill directory, full-capability (no advisory-only).
 - `xsk uninstall` removes exactly and only the files `xsk` created, leaving user/third-party files untouched.
-- Each of the 5 skills is installable, behaves as specified, and reads naturally (no AI-formulaic wording).
+- Each of the 6 skills is installable, behaves as specified, and reads naturally (no AI-formulaic wording).
 - A non-agent-skill project invoking `xsk-skill-scaffold` fails loud with a clear reason.
 - `xsk-skill-scaffold` applied to this repo audits to zero gaps (the project conforms to its own standard; see §4.3 self-conformance).
 
@@ -32,7 +32,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 ### In Scope
 
-- 5 skills: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`.
+- 6 skills: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-check`.
 - CLI: `install`, `uninstall`, `status`, `help`, `version`, `doctor`.
 - 4 platforms: Claude Code, Codex, opencode, Gemini (all full).
 - Manifest-backed install/uninstall safety (owned-only removal, ownership markers, atomic writes, symlink refusal).
@@ -56,7 +56,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 | npm package | `@xenonbyte/xsk` |
 | CLI binary | `xsk` |
 | Skill prefix | `xsk-` |
-| Skills | `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req` |
+| Skills | `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-check` |
 | Skill content language | English |
 | Runtime | Node ≥ 20, CommonJS, zero third-party runtime dependencies |
 | Requirement output directory | `requirements/` (project-local, version-controlled) |
@@ -221,7 +221,7 @@ xsk/
 ├── bin/xsk.js                  # CLI entry point
 ├── lib/
 │   ├── input.js                # argv parsing, platform-list parsing, unknown-option rejection
-│   ├── skills.js               # NEW: skill registry (5 skills + metadata + platform targeting)
+│   ├── skills.js               # NEW: skill registry (6 skills + metadata + platform targeting)
 │   ├── install.js              # plan -> preflight -> backup -> atomic write -> manifest
 │   ├── uninstall.js            # manifest-backed, owned-only removal
 │   ├── manifest.js             # read/validate/write install manifest (~/.xsk/manifests/)
@@ -375,7 +375,11 @@ Each phase is independently deliverable; the system is usable after each.
 ### Phase 3 — `xsk-skill-scaffold` + `xsk-write-req` + `xsk-archive-req`
 - `xsk-skill-scaffold` (4 platforms full).
 - `xsk-write-req` + `xsk-archive-req` + `requirements/` convention.
-- **Deliverable**: all 5 skills live.
+- **Deliverable**: all 5 original skills live.
+
+### Phase 4 — `xsk-check` (distilled from Waza `/check`)
+- `xsk-check` (4 platforms full): the default-review discipline as a single self-contained skill, dropping Waza's file-backed modes and parallel-specialist machinery.
+- **Deliverable**: all 6 skills live.
 
 No "Phase 0 investigation" (research done). No phase depends on the next to be useful.
 
@@ -406,7 +410,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 | # | Decision | Rationale |
 |---|---|---|
 | D1 | Package `@xenonbyte/xsk`, binary `xsk`, prefix `xsk-` | matches npm scope; short; "X SKills" |
-| D2 | Skill names: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req` | user-defined |
+| D2 | Skill names: `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-check` | user-defined; catalog extended from 5 to 6 to add `xsk-check`, distilled from Waza `/check` (default-review discipline only; Waza's multi-mode and parallel-specialist machinery deliberately not promoted) |
 | D3 | Skill content language: English | matches the Waza ecosystem; triggers are multilingual |
 | D4 | All 4 platforms full; uniform `<skill-root>/<name>/SKILL.md` | verified: Claude, Codex, Gemini, opencode all load `SKILL.md` skill directories; Codex uses the agent-compatible `~/.agents/skills/` user root, Gemini and opencode also support that alias, and opencode is Claude-skill-compatible |
 | D5 | Self-contained zero-dep Node CJS; install/manifest/CLI modeled on a verified 4-platform install pattern, implemented in-repo | reuses a proven mechanism (per-platform homes, atomic write + `rename`, owned-only manifest uninstall, `ok`/`drift`/`invalid` status) without coupling the doc to an external source |

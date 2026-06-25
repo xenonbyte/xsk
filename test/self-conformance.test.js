@@ -139,6 +139,7 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
     'shared/skill-common.md', 'templates/skill.md.tmpl',
     'skills/think/SKILL.md', 'skills/bypass-claude/SKILL.md',
     'skills/skill-scaffold/SKILL.md', 'skills/write-req/SKILL.md', 'skills/archive-req/SKILL.md',
+    'skills/check/SKILL.md',
   ];
   for (const r of required) {
     assert.ok(files.includes(r), `package includes ${r}`);

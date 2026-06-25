@@ -66,11 +66,11 @@ test('generator: buildAll builds every registered skill', () => {
   }
 });
 
-test('generator: all five skills are registered with name + description frontmatter', () => {
+test('generator: all six skills are registered with name + description frontmatter', () => {
   const names = skills.map((s) => s.name).sort();
   assert.deepStrictEqual(
     names,
-    ['xsk-archive-req', 'xsk-bypass-claude', 'xsk-skill-scaffold', 'xsk-think', 'xsk-write-req'],
+    ['xsk-archive-req', 'xsk-bypass-claude', 'xsk-check', 'xsk-skill-scaffold', 'xsk-think', 'xsk-write-req'],
   );
   for (const skill of skills) {
     const built = buildSkill(skill);

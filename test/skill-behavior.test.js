@@ -103,6 +103,18 @@ test('skill-behavior: xsk-archive-req — archives active doc, zero active remai
   assert.ok(/refuse/i.test(c), 'refuses when there is nothing to archive');
 });
 
+test('skill-behavior: xsk-check — diff review, hard stops, evidence gate, verify, stop', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-check'));
+  assert.ok(/scope drift/i.test(c), 'checks scope drift');
+  assert.ok(/hard stops/i.test(c), 'applies hard stops');
+  assert.ok(/HIGH or CRITICAL/.test(c) && /exact file and line/.test(c), 'evidence-gated findings');
+  assert.ok(/inherited stdio/.test(c), 'carries the captured-output hard stop (A+ distillation)');
+  assert.ok(/regression test/.test(c), 'requires a regression test for bug fixes');
+  assert.ok(/看看代码/.test(c) && /code review/i.test(c), 'multilingual triggers');
+  assert.ok(/Do not merge, push/.test(c), 'stops without merging or pushing');
+  assert.ok(!/persona-catalog|check-update|🥷|\.\.\//.test(c), 'no Waza-internal references');
+});
+
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {
   for (const s of skills) {
     const c = body(s);
