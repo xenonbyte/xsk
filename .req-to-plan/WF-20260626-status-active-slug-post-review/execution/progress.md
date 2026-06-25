@@ -10,7 +10,7 @@ Execution BASE: 7592a575d789cc0c003d2f49d34b2183d348463c
 - [x] PLAN-TASK-004 status reports invalid (not drift/ok) on out-of-root paths
 - [x] PLAN-TASK-005 doctor forwards platformRoots and adds writable-xsk-root check
 - [x] PLAN-TASK-006 Per-command option allow-lists in the parser
-- [ ] PLAN-TASK-007 xsk-archive-req atomicity, collision, invalid-slug
+- [x] PLAN-TASK-007 xsk-archive-req atomicity, collision, invalid-slug
 - [ ] PLAN-TASK-008 xsk-bypass-claude recast to settings.local.json (skill + registry + golden)
 - [ ] PLAN-TASK-009 xsk-bypass-claude docs, READMEs, and D10
 - [ ] PLAN-TASK-010 Single-active invariant guard in write-req and archive-req
@@ -24,3 +24,4 @@ Task 3: complete (commits b9473d4..8578747, review clean)
 Task 4: complete (commits 0a36833..e54be57, review clean)
 Task 5: complete (commits e8c47bc..a9a0a9b, review clean)
 Task 6: complete (commits 69aa797..15a1f34, review clean)
+Task 7: complete (commits 13d0e0d..84a798e, review clean)
