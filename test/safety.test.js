@@ -12,7 +12,7 @@ const path = require('node:path');
 
 const { install } = require('../lib/install');
 const { uninstall } = require('../lib/uninstall');
-const { read } = require('../lib/manifest');
+const { read, write, create } = require('../lib/manifest');
 const { get, skills: allSkills } = require('../lib/skills');
 const { MARKER } = require('../lib/install');
 
@@ -53,6 +53,28 @@ test('safety: ownership-marker gating — missing marker skips directory removal
     'generated file left when ownership marker absent');
 });
 
+test('safety: partial uninstall keeps ownership marker so owned dir removal can be retried', () => {
+  const sb = sandbox();
+  installClaude(sb, [get('xsk-think')]);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const markerFile = path.join(skillDir, MARKER);
+  const extraFile = path.join(skillDir, 'user-note.txt');
+  fs.writeFileSync(extraFile, 'not owned by xsk');
+
+  const first = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  assert.strictEqual(first.exitCode, 2, 'first uninstall is partial because the dir is not empty');
+  assert.ok(fs.existsSync(markerFile), 'marker kept so a later uninstall can retry the owned dir');
+  const partial = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(partial.installed_paths.includes(skillDir), 'narrowed manifest keeps the owned dir');
+  assert.ok(partial.installed_paths.includes(markerFile), 'narrowed manifest keeps the marker');
+
+  fs.rmSync(extraFile, { force: true });
+  const second = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  assert.strictEqual(second.exitCode, 0, 'retry completes after the extra file is removed');
+  assert.ok(!fs.existsSync(skillDir), 'owned dir removed on retry');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after retry completes');
+});
+
 test('safety: symlink refusal — a symlink skill dir is never removed or traversed', () => {
   const sb = sandbox();
   installClaude(sb, [get('xsk-think')]);
@@ -67,6 +89,47 @@ test('safety: symlink refusal — a symlink skill dir is never removed or traver
   assert.ok(summary.platforms.claude.refused.includes(real), 'symlink reported as refused');
   assert.ok(fs.lstatSync(real).isSymbolicLink(), 'symlink left intact');
   assert.ok(fs.existsSync(elsewhere), 'link target untouched');
+});
+
+test('safety: uninstall refuses a symlink ancestor before reading the marker', () => {
+  const sb = sandbox();
+  const outside = path.join(sb.home, 'outside-claude');
+  const link = path.join(sb.home, '.claude');
+  const skillDir = path.join(link, 'skills', 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(path.join(outside, 'skills', 'xsk-think'), { recursive: true });
+  fs.writeFileSync(path.join(outside, 'skills', 'xsk-think', 'SKILL.md'), 'external skill');
+  fs.writeFileSync(path.join(outside, 'skills', 'xsk-think', MARKER), '@xenonbyte/xsk\n');
+  fs.symlinkSync(outside, link);
+  write(
+    'claude',
+    create('claude', '0.1.0', {
+      installed_paths: [skillDir, skillFile, markerFile],
+    }),
+    { xskRoot: sb.xskRoot },
+  );
+
+  const originalReadFileSync = fs.readFileSync;
+  let readMarker = false;
+  fs.readFileSync = function readFileSyncSpy(target, ...args) {
+    if (path.resolve(String(target)) === path.resolve(markerFile)) {
+      readMarker = true;
+      throw new Error('marker read before safety check');
+    }
+    return originalReadFileSync.call(fs, target, ...args);
+  };
+
+  let summary;
+  try {
+    summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
+
+  assert.strictEqual(readMarker, false, 'marker was not read through the symlink ancestor');
+  assert.ok(summary.platforms.claude.refused.includes(skillDir), 'unsafe skill dir reported as refused');
+  assert.ok(fs.lstatSync(link).isSymbolicLink(), 'symlink left intact');
 });
 
 test('safety: atomic-write rollback — a mid-run failure removes files already written this run', () => {

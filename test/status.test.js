@@ -37,6 +37,16 @@ test('status: statusOf drift when a recorded path is missing on disk', () => {
   );
 });
 
+test('status: statusOf drift when a recorded backup is missing on disk', () => {
+  const m = validManifestObj({
+    backups: [{ target: '/tmp/a/SKILL.md', backup: '/tmp/xsk-backup.bak' }],
+  });
+  assert.strictEqual(
+    statusOf(m, { expectedPlatform: 'claude', exists: (p) => p !== '/tmp/xsk-backup.bak' }),
+    'drift',
+  );
+});
+
 test('status: statusOf invalid for shape-broken manifest (invalid wins over drift)', () => {
   const broken = validManifestObj();
   delete broken.installed_at;
@@ -85,6 +95,102 @@ test('status: computeStatus reports drift when a recorded path is deleted', () =
   assert.ok(result.platforms.claude.missing.length > 0);
 });
 
+test('status: computeStatus reports drift when a recorded skill file becomes a directory', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  fs.rmSync(skillFile, { force: true });
+  fs.mkdirSync(skillFile);
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(skillFile));
+});
+
+test('status: computeStatus reports drift when a recorded marker becomes a directory', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const markerFile = path.join(claudeRoot, 'xsk-think', '.xsk-owned');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  fs.rmSync(markerFile, { force: true });
+  fs.mkdirSync(markerFile);
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(markerFile));
+});
+
+test('status: computeStatus reports drift when a recorded owned dir becomes a file', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const xskRoot = path.join(home, '.xsk');
+  const skillDir = path.join(home, 'claude-skills', 'xsk-think');
+  fs.mkdirSync(path.dirname(skillDir), { recursive: true });
+  fs.writeFileSync(skillDir, 'not a directory');
+  write('claude', create('claude', '0.1.0', { installed_paths: [skillDir] }), { xskRoot });
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(skillDir));
+});
+
+test('status: computeStatus reports drift when a recorded backup is deleted', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  fs.mkdirSync(path.dirname(skillFile), { recursive: true });
+  fs.writeFileSync(skillFile, 'user skill');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const manifest = require('../lib/manifest').read('claude', { xskRoot });
+  assert.strictEqual(manifest.backups.length, 1, 'install recorded a displaced user backup');
+  fs.rmSync(manifest.backups[0].backup, { force: true });
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(manifest.backups[0].backup));
+});
+
+test('status: computeStatus reports drift when a recorded backup becomes a directory', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  fs.mkdirSync(path.dirname(skillFile), { recursive: true });
+  fs.writeFileSync(skillFile, 'user skill');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const manifest = require('../lib/manifest').read('claude', { xskRoot });
+  const backup = manifest.backups[0].backup;
+  fs.rmSync(backup, { force: true });
+  fs.mkdirSync(backup);
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(backup));
+});
+
 test('status: computeStatus reports invalid for truncated manifest JSON', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
   const xskRoot = path.join(home, '.xsk');
@@ -93,6 +199,28 @@ test('status: computeStatus reports invalid for truncated manifest JSON', () => 
   fs.writeFileSync(path.join(dir, 'claude.manifest'), '{ "schema_version": 1, ');
   const result = computeStatus({ platforms: ['claude'], xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'invalid');
+});
+
+test('status: computeStatus reports invalid for shape-invalid installed_paths without counting paths', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const xskRoot = path.join(home, '.xsk');
+  const dir = path.join(xskRoot, 'manifests');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'claude.manifest'),
+    JSON.stringify({
+      schema_version: 1,
+      platform: 'claude',
+      version: '0.1.0',
+      installed_at: new Date().toISOString(),
+      installed_paths: 'not-an-array',
+      backups: [],
+    }),
+  );
+
+  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'invalid');
+  assert.strictEqual(result.platforms.claude.installedCount, undefined);
 });
 
 test('status: computeStatus reports not-installed when no manifest', () => {
@@ -144,6 +272,23 @@ test('doctor: writable check fails when an ancestor is a regular file', () => {
   const result = doctor({
     platforms: ['claude'],
     platformRoots: { claude: path.join(blocker, 'skills') },
+    xskRoot: path.join(home, '.xsk'),
+  });
+  const w = result.checks.find((c) => c.name === 'writable-claude');
+  assert.strictEqual(w.pass, false);
+  assert.strictEqual(result.allPass, false);
+});
+
+test('doctor: writable check fails when the skill dir has a symlink ancestor', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const outside = path.join(home, 'outside-claude');
+  const link = path.join(home, '.claude');
+  fs.mkdirSync(path.join(outside, 'skills'), { recursive: true });
+  fs.symlinkSync(outside, link);
+
+  const result = doctor({
+    platforms: ['claude'],
+    platformRoots: { claude: path.join(link, 'skills') },
     xskRoot: path.join(home, '.xsk'),
   });
   const w = result.checks.find((c) => c.name === 'writable-claude');

@@ -240,6 +240,32 @@ test('uninstall: a later run can finish after a partial (user reverts edit)', ()
   assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared');
 });
 
+test('uninstall: partial retry preserves a pre-existing unowned skill directory', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  installOne(sb);
+
+  const installedManifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!installedManifest.installed_paths.includes(skillDir), 'pre-existing dir is not owned');
+  fs.writeFileSync(skillFile, fs.readFileSync(skillFile, 'utf8') + '\n# USER EDIT\n');
+
+  let res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'first run partial');
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!narrowed.installed_paths.includes(skillDir), 'partial manifest does not claim the user-owned dir');
+
+  const { buildSkill } = require('../lib/generator');
+  fs.writeFileSync(skillFile, buildSkill(get('xsk-think')).content);
+
+  res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, 0, 'second run finishes');
+  assert.ok(fs.existsSync(skillDir), 'pre-existing dir survives retry');
+  assert.deepStrictEqual(fs.readdirSync(skillDir), [], 'generated files removed from preserved dir');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared');
+});
+
 test('uninstall: refuses to remove a symlink skill dir', () => {
   const sb = freshSandbox();
   installOne(sb);
