@@ -77,7 +77,7 @@ test('safety: atomic-write rollback — a mid-run failure removes files already 
   fs.writeFileSync(blockPath, 'blocking file');
   assert.throws(
     () => installClaude(sb, [get('xsk-think'), get('xsk-write-req')]),
-    /EEXIST|ENOTDIR|EISDIR|file/,
+    /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
     'install throws when a target dir cannot be created',
   );
   // xsk-think was written before the failure; rollback must remove it.

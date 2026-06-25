@@ -112,6 +112,98 @@ test('uninstall: restores a displaced user file from backup when the generated f
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'disk matches user original again');
 });
 
+test('uninstall: missing recorded backup is partial and retains generated files', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(skillFile, userContent);
+  installOne(sb);
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = manifest.backups[0];
+  fs.rmSync(backup.backup, { force: true });
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'missing backup forces partial');
+  assert.ok(res.refused.includes(skillDir), 'skill dir reported as refused');
+  assert.ok(fs.existsSync(skillFile), 'generated file retained until backup is available');
+  assert.ok(fs.existsSync(markerFile), 'marker retained until backup is available');
+
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed, 'manifest kept for later retry');
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.deepStrictEqual(narrowed.backups, [backup], 'missing backup record is retained');
+});
+
+test('uninstall: refuses unsafe backup paths from a corrupted manifest', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n');
+  installOne(sb);
+
+  const victim = path.join(sb.home, 'not-xsk-owned-backup.md');
+  fs.writeFileSync(victim, 'do not delete');
+  const { write } = require('../lib/manifest');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  manifest.backups[0].backup = victim;
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'unsafe backup path forces partial');
+  assert.ok(res.refused.includes(skillDir), 'skill dir reported as refused');
+  assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not delete', 'unsafe backup path not deleted');
+  assert.ok(fs.existsSync(skillFile), 'generated skill file retained');
+
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(narrowed.installed_paths.includes(path.join(skillDir, MARKER)), 'retained marker stays in manifest');
+  assert.deepStrictEqual(narrowed.backups, [{ target: skillFile, backup: victim }], 'unsafe backup record retained');
+
+  const retry = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(retry.exitCode, PARTIAL_EXIT, 'second run remains partial while backup path is unsafe');
+  assert.ok(retry.refused.includes(skillDir), 'second run still refuses skill dir');
+  assert.ok(fs.existsSync(skillFile), 'second run still retains generated skill file');
+});
+
+test('uninstall: refuses a non-regular marker before mutating generated files', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.rmSync(markerFile, { force: true });
+  fs.mkdirSync(markerFile);
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'non-regular marker is partial');
+  assert.ok(res.refused.includes(skillDir), 'skill dir reported as refused');
+  assert.ok(fs.existsSync(skillFile), 'generated file retained');
+  assert.ok(fs.statSync(markerFile).isDirectory(), 'directory marker retained');
+  assert.ok(read('claude', { xskRoot: sb.xskRoot }), 'manifest retained for retry');
+});
+
+test('uninstall: refuses a marker with unexpected content before mutating generated files', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.writeFileSync(markerFile, 'not-xsk\n');
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'unexpected marker content is partial');
+  assert.ok(res.refused.includes(skillDir), 'skill dir reported as refused');
+  assert.ok(fs.existsSync(skillFile), 'generated file retained');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), 'not-xsk\n', 'unexpected marker retained');
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(narrowed.installed_paths.includes(markerFile), 'retained marker stays in manifest');
+});
+
 test('uninstall: user-edited generated file is retained with partial report and narrowed manifest', () => {
   const sb = freshSandbox();
   installOne(sb);
@@ -163,6 +255,32 @@ test('uninstall: refuses to remove a symlink skill dir', () => {
   const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
   assert.ok(res.refused.includes(real), 'symlink dir refused');
   assert.ok(fs.lstatSync(real).isSymbolicLink(), 'symlink left intact');
+});
+
+test('uninstall: refuses paths with a symlink ancestor', () => {
+  const sb = freshSandbox();
+  const outside = path.join(sb.home, 'outside-ancestor-target');
+  const link = path.join(sb.home, '.claude');
+  const skillDir = path.join(link, 'skills', 'xsk-think');
+  const realSkillDir = path.join(outside, 'skills', 'xsk-think');
+  fs.mkdirSync(realSkillDir, { recursive: true });
+  fs.symlinkSync(outside, link);
+  fs.writeFileSync(path.join(realSkillDir, 'SKILL.md'), 'generated');
+  fs.writeFileSync(path.join(realSkillDir, MARKER), '@xenonbyte/xsk\n');
+
+  const { write, create } = require('../lib/manifest');
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [
+      skillDir,
+      path.join(skillDir, 'SKILL.md'),
+      path.join(skillDir, MARKER),
+    ],
+  }), { xskRoot: sb.xskRoot });
+
+  const res = uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'symlink ancestor is partial');
+  assert.ok(res.refused.includes(skillDir), 'symlink ancestor path refused');
+  assert.ok(fs.existsSync(path.join(realSkillDir, 'SKILL.md')), 'outside target not removed');
 });
 
 test('uninstall: no manifest -> nothing to uninstall, exit 0', () => {

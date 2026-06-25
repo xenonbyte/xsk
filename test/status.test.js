@@ -137,6 +137,20 @@ test('doctor: writable check passes for a creatable temp root', () => {
   assert.strictEqual(w.pass, true);
 });
 
+test('doctor: writable check fails when an ancestor is a regular file', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const blocker = path.join(home, 'not-a-dir');
+  fs.writeFileSync(blocker, 'blocking file');
+  const result = doctor({
+    platforms: ['claude'],
+    platformRoots: { claude: path.join(blocker, 'skills') },
+    xskRoot: path.join(home, '.xsk'),
+  });
+  const w = result.checks.find((c) => c.name === 'writable-claude');
+  assert.strictEqual(w.pass, false);
+  assert.strictEqual(result.allPass, false);
+});
+
 test('doctor: manifest-valid check reflects a valid manifest', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
   const xskRoot = path.join(home, '.xsk');

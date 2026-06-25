@@ -69,7 +69,7 @@ xsk help
 | opencode | `~/.config/opencode/skills/<name>/SKILL.md` |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` |
 
-平台行为依据 `docs/REQUIREMENTS.md` 中链接的官方文档，校验日期为 2026-06-25。
+平台行为依据源仓库 `docs/REQUIREMENTS.md` 中链接的官方文档，校验日期为 2026-06-25。
 
 ## Safety
 
@@ -91,7 +91,7 @@ npm run syntaxcheck # 对 bin/、lib/、test/ 下每个文件执行 node --check
 npm pack --dry-run  # 校验 package 内容
 ```
 
-完整需求规格见 `docs/REQUIREMENTS.md`。
+完整需求规格见源仓库中的 `docs/REQUIREMENTS.md`。
 
 ## License
 

@@ -39,6 +39,6 @@ Operate on the **current project directory** only. The target is always `.claude
 
 ## Output
 
-Report the path written (`.claude/settings.json`) and the resulting JSON. Take no further action.
+Report only the path written (`.claude/settings.json`) and that `permissions.defaultMode` is `bypassPermissions`. Do not include preserved setting values. Take no further action.
 
 <SHARED_MASKED>

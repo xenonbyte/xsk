@@ -52,6 +52,27 @@ test('install: written SKILL.md content is complete (atomic, no leftover temp fi
   assert.ok(content.trim().endsWith('approached, not what the agent is technically capable of.'));
 });
 
+test('install: atomic writes do not use a predictable temp path that can be symlinked', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const victim = path.join(sb.home, 'outside-temp-target.md');
+  fs.writeFileSync(victim, 'do not overwrite');
+  fs.symlinkSync(victim, path.join(skillDir, `.SKILL.md.tmp-${process.pid}`));
+
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not overwrite', 'symlink target not overwritten');
+  assert.ok(fs.existsSync(skillFile), 'SKILL.md created');
+  assert.strictEqual(fs.lstatSync(skillFile).isSymbolicLink(), false, 'SKILL.md is a real file');
+});
+
 test('install: records every created path in the platform manifest', () => {
   const sb = freshSandbox();
   install({
@@ -90,6 +111,76 @@ test('install: backs up a pre-existing user file and records it in backups[]', (
   assert.strictEqual(backup.target, skillFile);
   assert.ok(fs.existsSync(backup.backup), 'backup file exists on disk');
   assert.strictEqual(fs.readFileSync(backup.backup, 'utf8'), userContent, 'backup preserves user content');
+});
+
+test('install: refuses a symlinked backup file before copying user content', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user-owned custom\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  const backupDir = path.join(sb.xskRoot, 'install', 'backups', 'claude');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const victim = path.join(sb.home, 'outside-backup-target.md');
+  fs.writeFileSync(victim, 'do not overwrite');
+  fs.symlinkSync(victim, path.join(backupDir, 'xsk-think.SKILL.md.bak'));
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /symlink/i,
+  );
+
+  assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not overwrite', 'symlink target not overwritten');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user skill file preserved');
+});
+
+test('install: failed marker write does not leave stale generated files', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const originalWriteFileSync = fs.writeFileSync;
+  let injected = false;
+  let installError = null;
+
+  fs.writeFileSync = function writeMarkerThenThrow(target, data, options) {
+    if (!injected && target === markerFile) {
+      injected = true;
+      originalWriteFileSync.call(fs, target, 'partial marker', options);
+      throw new Error('simulated marker failure');
+    }
+    return originalWriteFileSync.call(fs, target, data, options);
+  };
+
+  try {
+    install({
+      platforms: ['claude'],
+      platformRoots: { claude: sb.claudeRoot },
+      xskRoot: sb.xskRoot,
+      skills: [get('xsk-think')],
+    });
+  } catch (e) {
+    installError = e;
+  } finally {
+    fs.writeFileSync = originalWriteFileSync;
+  }
+
+  if (installError) {
+    assert.match(installError.message, /simulated marker failure/);
+    assert.ok(!fs.existsSync(skillFile), 'generated skill file rolled back');
+    assert.ok(!fs.existsSync(markerFile), 'partial marker rolled back');
+  } else {
+    assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), `${PACKAGE_NAME}\n`);
+    assert.ok(fs.existsSync(skillFile), 'generated skill file installed');
+  }
 });
 
 test('install: refuses a pre-existing symlink skill directory before writing through it', () => {
@@ -133,6 +224,27 @@ test('install: refuses a symlinked platform root before writing through it', () 
   assert.ok(!fs.existsSync(path.join(outside, 'xsk-think', MARKER)), 'outside target marker not written');
 });
 
+test('install: refuses a symlink ancestor before creating a platform root', () => {
+  const sb = freshSandbox();
+  const outside = path.join(sb.home, 'outside-ancestor-target');
+  const link = path.join(sb.home, '.claude');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.symlinkSync(outside, link);
+  const skillsRoot = path.join(link, 'skills');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: skillsRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /symlink/i,
+  );
+  assert.ok(!fs.existsSync(path.join(outside, 'skills', 'xsk-think', 'SKILL.md')), 'outside ancestor not written');
+});
+
 test('install: re-install over an owned file does not create a new backup', () => {
   const sb = freshSandbox();
   const opts = {
@@ -165,6 +277,32 @@ test('install: re-install refuses to overwrite a user-edited owned skill file', 
   assert.deepStrictEqual(read('claude', { xskRoot: sb.xskRoot }).backups, [], 'no backup record added');
 });
 
+test('install: refuses an invalid ownership marker before adopting matching skill content', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const generatedContent = buildSkill(get('xsk-think')).content;
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, generatedContent);
+  fs.writeFileSync(markerFile, 'not-xsk\n');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /marker/i,
+  );
+
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), generatedContent, 'skill file left untouched');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), 'not-xsk\n', 'invalid marker left untouched');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'no manifest written');
+});
+
 test('install: failed re-install rollback preserves a pre-existing owned install', () => {
   const sb = freshSandbox();
   const opts = {
@@ -189,11 +327,103 @@ test('install: failed re-install rollback preserves a pre-existing owned install
         xskRoot: sb.xskRoot,
         skills: [get('xsk-think'), get('xsk-write-req')],
       }),
-    /EEXIST|ENOTDIR|EISDIR|file/,
+    /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
   );
 
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), originalSkill, 'pre-existing SKILL.md preserved');
   assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), originalMarker, 'pre-existing marker preserved');
+});
+
+test('install: failed install rollback removes directories created in the failed run', () => {
+  const sb = freshSandbox();
+  const blockingPath = path.join(sb.claudeRoot, 'xsk-write-req');
+  fs.mkdirSync(sb.claudeRoot, { recursive: true });
+  fs.writeFileSync(blockingPath, 'blocking file');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think'), get('xsk-write-req')],
+      }),
+    /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
+  );
+
+  assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think')), 'new skill directory rolled back');
+  assert.strictEqual(fs.readFileSync(blockingPath, 'utf8'), 'blocking file', 'pre-existing blocker preserved');
+});
+
+test('install: later platform failure rolls back earlier platform writes', () => {
+  const sb = freshSandbox();
+  const codexRoot = path.join(sb.home, 'codex-skills');
+  const codexBlocker = path.join(codexRoot, 'xsk-think');
+  fs.mkdirSync(codexRoot, { recursive: true });
+  fs.writeFileSync(codexBlocker, 'blocking file');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude', 'codex'],
+        platformRoots: { claude: sb.claudeRoot, codex: codexRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
+  );
+
+  assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think')), 'earlier platform skill dir rolled back');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'earlier platform manifest removed');
+  assert.strictEqual(fs.readFileSync(codexBlocker, 'utf8'), 'blocking file', 'later platform blocker preserved');
+});
+
+test('install: rollback restore refuses a swapped symlink target', () => {
+  const sb = freshSandbox();
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const victim = path.join(sb.home, 'outside-rollback-target.md');
+  fs.writeFileSync(victim, 'do not overwrite');
+  const blockingPath = path.join(sb.claudeRoot, 'xsk-write-req');
+  fs.writeFileSync(blockingPath, 'blocking file');
+  const originalMkdirSync = fs.mkdirSync;
+  let swapped = false;
+
+  fs.mkdirSync = function swapDuringRollback(target, options) {
+    if (!swapped && target === skillDir && new Error().stack.includes('rollback')) {
+      swapped = true;
+      fs.rmSync(skillFile, { force: true });
+      fs.symlinkSync(victim, skillFile);
+    }
+    return originalMkdirSync.call(fs, target, options);
+  };
+
+  try {
+    assert.throws(
+      () =>
+        install({
+          platforms: ['claude'],
+          platformRoots: { claude: sb.claudeRoot },
+          xskRoot: sb.xskRoot,
+          skills: [get('xsk-think'), get('xsk-write-req')],
+        }),
+      /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
+    );
+  } finally {
+    fs.mkdirSync = originalMkdirSync;
+  }
+
+  assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not overwrite', 'rollback did not follow symlink');
+  assert.ok(fs.lstatSync(skillFile).isSymbolicLink(), 'swapped symlink left for manual recovery');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), `${PACKAGE_NAME}\n`, 'marker restored');
 });
 
 test('install: re-install preserves the manifest record for an original displaced backup', () => {
@@ -266,6 +496,57 @@ test('install: user-owned skill directories are not recorded or retained after u
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored');
   assert.ok(!fs.existsSync(path.join(skillDir, MARKER)), 'ownership marker removed');
   assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after generated files are gone');
+});
+
+test('install: re-install does not convert a pre-existing user directory into owned state', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  fs.mkdirSync(skillDir, { recursive: true });
+
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  install(opts);
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing dir remains unowned after reinstall');
+
+  const { uninstall } = require('../lib/uninstall');
+  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  assert.strictEqual(summary.exitCode, 0);
+  assert.ok(fs.existsSync(skillDir), 'user-owned directory survives uninstall after reinstall');
+  assert.deepStrictEqual(fs.readdirSync(skillDir), [], 'generated files removed from preserved user dir');
+});
+
+test('install: rollback removes unrecorded backups created before a later failure', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user-owned custom\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+  const blockingPath = path.join(sb.claudeRoot, 'xsk-write-req');
+  fs.writeFileSync(blockingPath, 'blocking file');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think'), get('xsk-write-req')],
+      }),
+    /EEXIST|ENOTDIR|EISDIR|file|non-directory/,
+  );
+
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user file restored');
+  const backupDir = path.join(sb.xskRoot, 'install', 'backups', 'claude');
+  const remainingBackups = fs.existsSync(backupDir) ? fs.readdirSync(backupDir) : [];
+  assert.deepStrictEqual(remainingBackups, [], 'failed install leaves no unrecorded backup file');
 });
 
 test('install: applies per-skill platform targeting (xsk-think installs to claude)', () => {

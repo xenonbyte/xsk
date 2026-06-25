@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execSync } = require('node:child_process');
 
@@ -40,42 +41,60 @@ function capture() {
   };
 }
 
+function cliFixture() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-self-conf-'));
+  return {
+    home,
+    xskRoot: path.join(home, '.xsk'),
+    platformRoots: {
+      claude: path.join(home, 'claude-skills'),
+      codex: path.join(home, 'codex-skills'),
+      opencode: path.join(home, 'opencode-skills'),
+      gemini: path.join(home, 'gemini-skills'),
+    },
+  };
+}
+
 test('self-conformance: the five core CLI commands resolve without crashing', () => {
+  const fixture = cliFixture();
   const commands = ['version', 'help', 'status', 'doctor', 'uninstall'];
-  for (const cmd of commands) {
+  try {
+    for (const cmd of commands) {
+      const s = capture();
+      const code = main([cmd], {
+        stdout: s.stdout,
+        stderr: s.stderr,
+        xskRoot: fixture.xskRoot,
+        platformRoots: fixture.platformRoots,
+      });
+      assert.ok([0, 1, 2].includes(code), `${cmd} resolved (exit ${code})`);
+    }
+    // install resolves end-to-end against fixture roots
     const s = capture();
-    const code = main([cmd], {
+    const code = main(['install', '--platform', 'claude'], {
       stdout: s.stdout,
       stderr: s.stderr,
-      xskRoot: path.join(ROOT, '.self-conf-tmp-xsk-' + process.pid),
-      platformRoots: {
-        claude: path.join(ROOT, '.self-conf-tmp-claude-' + process.pid),
-        codex: path.join(ROOT, '.self-conf-tmp-codex-' + process.pid),
-        opencode: path.join(ROOT, '.self-conf-tmp-opencode-' + process.pid),
-        gemini: path.join(ROOT, '.self-conf-tmp-gemini-' + process.pid),
-      },
+      xskRoot: fixture.xskRoot,
+      platformRoots: fixture.platformRoots,
     });
-    assert.ok([0, 1, 2].includes(code), `${cmd} resolved (exit ${code})`);
+    assert.strictEqual(code, 0, 'install resolved');
+    // clean up the fixture install through the public command first
+    main(['uninstall', '--platform', 'claude'], {
+      stdout: s.stdout,
+      stderr: s.stderr,
+      xskRoot: fixture.xskRoot,
+      platformRoots: fixture.platformRoots,
+    });
+  } finally {
+    fs.rmSync(fixture.home, { recursive: true, force: true });
   }
-  // install resolves end-to-end against fixture roots
-  const s = capture();
-  const code = main(['install', '--platform', 'claude'], {
-    stdout: s.stdout,
-    stderr: s.stderr,
-    xskRoot: path.join(ROOT, '.self-conf-tmp-xsk-' + process.pid),
-    platformRoots: { claude: path.join(ROOT, '.self-conf-tmp-claude-' + process.pid) },
-  });
-  assert.strictEqual(code, 0, 'install resolved');
-  // clean up the fixture install
-  main(['uninstall', '--platform', 'claude'], {
-    stdout: s.stdout,
-    stderr: s.stderr,
-    xskRoot: path.join(ROOT, '.self-conf-tmp-xsk-' + process.pid),
-    platformRoots: { claude: path.join(ROOT, '.self-conf-tmp-claude-' + process.pid) },
-  });
-  for (const d of ['.self-conf-tmp-xsk-', '.self-conf-tmp-claude-', '.self-conf-tmp-codex-', '.self-conf-tmp-opencode-', '.self-conf-tmp-gemini-']) {
-    fs.rmSync(path.join(ROOT, d + process.pid), { recursive: true, force: true });
-  }
+});
+
+test('self-conformance: CLI fixture roots are never under the repository root', () => {
+  const source = fs.readFileSync(__filename, 'utf8');
+  const forbidden = 'path.join(ROOT, ' + "'." + 'self-conf-tmp';
+  assert.ok(!source.includes(forbidden), 'CLI fixture roots must use fs.mkdtempSync under os.tmpdir()');
+  assert.ok(source.includes('fs.mkdtempSync(path.join(os.tmpdir()'), 'CLI fixture roots come from os.tmpdir()');
 });
 
 test('self-conformance: install/uninstall/status/doctor are the documented command surface', () => {
@@ -118,7 +137,6 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
     'lib/adapters/claude.js', 'lib/adapters/codex.js', 'lib/adapters/opencode.js',
     'lib/adapters/gemini.js',
     'shared/skill-common.md', 'templates/skill.md.tmpl',
-    'docs/REQUIREMENTS.md',
     'skills/think/SKILL.md', 'skills/bypass-claude/SKILL.md',
     'skills/skill-scaffold/SKILL.md', 'skills/write-req/SKILL.md', 'skills/archive-req/SKILL.md',
   ];
@@ -132,6 +150,7 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
     f.startsWith('.drfx') ||
     f.startsWith('.claude/') ||
     f.startsWith('.codegraph') ||
+    f === 'docs/REQUIREMENTS.md' ||
     f.includes('fixtures/golden'),
   );
   assert.deepStrictEqual(excluded, [], 'no dev/test/tooling paths are packed');

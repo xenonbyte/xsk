@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { SCHEMA_VERSION, validate, read, write, create, manifestPath } = require('../lib/manifest');
+const { SCHEMA_VERSION, validate, read, write, create, manifestPath, removeManifest } = require('../lib/manifest');
 
 function validManifest(overrides) {
   return Object.assign(
@@ -78,27 +78,67 @@ test('manifest: write creates the manifests dir and round-trips through read', (
   assert.deepStrictEqual(back, m);
 });
 
-test('manifest: failed write leaves the previous manifest intact', () => {
+test('manifest: write does not follow a swapped temp-file symlink', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-m-'));
-  const oldManifest = validManifest({ version: '0.1.0' });
-  const newManifest = validManifest({ version: '0.2.0' });
-  const written = write('claude', oldManifest, { xskRoot: tmp });
+  const dir = path.join(tmp, 'manifests');
+  fs.mkdirSync(dir, { recursive: true });
+  const victim = path.join(tmp, 'outside-manifest-target');
+  fs.writeFileSync(victim, 'do not overwrite');
   const originalWriteFileSync = fs.writeFileSync;
   let injected = false;
 
-  fs.writeFileSync = function writePartialThenThrow(target, data, options) {
-    if (!injected && String(target).includes('claude.manifest')) {
+  fs.writeFileSync = function symlinkThenWrite(target, data, options) {
+    if (!injected && typeof target === 'string' && path.basename(target).includes('claude.manifest.tmp-')) {
       injected = true;
-      originalWriteFileSync.call(fs, target, '{"schema_version":', options);
-      throw new Error('simulated write failure');
+      fs.symlinkSync(victim, target);
     }
     return originalWriteFileSync.call(fs, target, data, options);
   };
 
   try {
-    assert.throws(() => write('claude', newManifest, { xskRoot: tmp }), /simulated write failure/);
+    write('claude', validManifest(), { xskRoot: tmp });
   } finally {
     fs.writeFileSync = originalWriteFileSync;
+  }
+
+  assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not overwrite', 'symlink target not overwritten');
+  assert.strictEqual(fs.lstatSync(manifestPath('claude', { xskRoot: tmp })).isSymbolicLink(), false);
+});
+
+test('manifest: read, write, and remove refuse a symlinked xskRoot', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-m-'));
+  const outside = path.join(home, 'outside-xsk');
+  const xskRoot = path.join(home, '.xsk');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.symlinkSync(outside, xskRoot);
+  const m = validManifest();
+
+  assert.throws(() => read('claude', { xskRoot }), /symlink/i);
+  assert.throws(() => write('claude', m, { xskRoot }), /symlink/i);
+  assert.throws(() => removeManifest('claude', { xskRoot }), /symlink/i);
+  assert.ok(!fs.existsSync(path.join(outside, 'manifests', 'claude.manifest')), 'outside manifest not written');
+});
+
+test('manifest: failed write leaves the previous manifest intact', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-m-'));
+  const oldManifest = validManifest({ version: '0.1.0' });
+  const newManifest = validManifest({ version: '0.2.0' });
+  const written = write('claude', oldManifest, { xskRoot: tmp });
+  const originalRenameSync = fs.renameSync;
+  let injected = false;
+
+  fs.renameSync = function throwOnManifestRename(from, to) {
+    if (!injected && to === written) {
+      injected = true;
+      throw new Error('simulated write failure');
+    }
+    return originalRenameSync.call(fs, from, to);
+  };
+
+  try {
+    assert.throws(() => write('claude', newManifest, { xskRoot: tmp }), /simulated write failure/);
+  } finally {
+    fs.renameSync = originalRenameSync;
   }
 
   assert.deepStrictEqual(read('claude', { xskRoot: tmp }), oldManifest);

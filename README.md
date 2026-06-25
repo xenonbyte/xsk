@@ -69,7 +69,7 @@ All four platforms are full and use the same `<name>/SKILL.md` skill-directory s
 | opencode | `~/.config/opencode/skills/<name>/SKILL.md` |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` |
 
-Platform behavior is verified as of 2026-06-25 against the official docs linked in `docs/REQUIREMENTS.md`.
+Platform behavior is verified as of 2026-06-25 against the official docs linked from the source repository's `docs/REQUIREMENTS.md`.
 
 ## Safety
 
@@ -91,7 +91,7 @@ npm run syntaxcheck # node --check every bin/, lib/, test/ file
 npm pack --dry-run  # verify package contents
 ```
 
-The full requirement specification lives in `docs/REQUIREMENTS.md`.
+The full requirement specification lives in the source repository at `docs/REQUIREMENTS.md`.
 
 ## License
 

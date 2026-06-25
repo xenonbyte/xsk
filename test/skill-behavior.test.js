@@ -69,6 +69,7 @@ test('skill-behavior: xsk-bypass-claude — target field, preserve-others, setti
   assert.ok(/settings\.local\.json/.test(c), 'explicitly names the excluded settings.local.json');
   assert.ok(/跳过权限/.test(c) && /bypass permissions/i.test(c), 'multilingual triggers');
   assert.ok(/idempotent/i.test(c), 'idempotent no-op stated');
+  assert.ok(!/resulting JSON|full JSON/i.test(c), 'does not ask agents to print full settings JSON');
 });
 
 test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuses non-agent projects', () => {
