@@ -80,11 +80,13 @@ test('generator: all six skills are registered with name + description frontmatt
   }
 });
 
-test('generator: xsk-bypass-claude targets .claude/settings.json and bypassPermissions', () => {
+test('generator: xsk-bypass-claude targets .claude/settings.local.json and refuses unsafe cases', () => {
   const c = buildSkill(get('xsk-bypass-claude')).content;
-  assert.ok(/\.claude\/settings\.json/.test(c), 'targets .claude/settings.json');
+  assert.ok(/\.claude\/settings\.local\.json/.test(c), 'targets .claude/settings.local.json');
   assert.ok(/bypassPermissions/.test(c), 'uses bypassPermissions');
-  assert.ok(/never touch[^\n]*settings\.local\.json/i.test(c), 'explicitly excludes settings.local.json');
+  assert.ok(/not Claude Code/i.test(c) && /write nothing/i.test(c), 'refuses outside Claude Code');
+  assert.ok(/invalid JSON/i.test(c) && /not a JSON object/i.test(c), 'refuses malformed or non-object JSON');
+  assert.ok(!/writing `?\.claude\/settings\.json`?/i.test(c), 'does not instruct writing .claude/settings.json');
 });
 
 test('generator: xsk-skill-scaffold exposes gate/audit/propose/apply steps', () => {

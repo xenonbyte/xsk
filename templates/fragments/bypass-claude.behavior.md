@@ -1,6 +1,10 @@
-Operate on the **current project directory** only. The target is always `.claude/settings.json`.
+Operate on the **current project directory** only. The target is always `.claude/settings.local.json`.
 
-1. If `.claude/settings.json` does not exist, create the `.claude/` directory and write exactly:
+1. If the current agent is not Claude Code, refuse the request, state that this is a Claude Code-only skill, write nothing, and stop.
+
+2. Never write or modify `.claude/settings.json`.
+
+3. If `.claude/settings.local.json` does not exist, create the `.claude/` directory and write exactly:
 
    ```json
    {
@@ -10,10 +14,10 @@ Operate on the **current project directory** only. The target is always `.claude
    }
    ```
 
-2. If `.claude/settings.json` already exists, read it, set only `permissions.defaultMode` to `"bypassPermissions"`, and preserve every other field and its value. Write back with 2-space indentation and a trailing newline. Do not reorder, reformat, or drop existing keys.
+4. If `.claude/settings.local.json` already exists, read it. If the file is invalid JSON or is not a JSON object, report that `.claude/settings.local.json` is malformed, write nothing, and stop.
 
-3. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
+5. Otherwise, set only `permissions.defaultMode` to `"bypassPermissions"` in `.claude/settings.local.json`, preserve every other field and its value, and write back with 2-space indentation and a trailing newline. Do not reorder, reformat, or drop existing keys.
 
-4. Read only `.claude/settings.json`. Never touch `.claude/settings.local.json`.
+6. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
 
 `permissions.defaultMode = "bypassPermissions"` is the verified Claude Code setting for auto-approving tools.

@@ -1,11 +1,11 @@
 ---
 name: xsk-bypass-claude
-description: Set the current project to Claude Code bypass-permissions mode by writing .claude/settings.json. Claude only.
+description: Set the current project to Claude Code bypass-permissions mode by writing .claude/settings.local.json. Claude only.
 ---
 
 # xsk-bypass-claude
 
-Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.json`. This is a Claude Code-only skill; it has no effect on Codex, opencode, or Gemini.
+Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.local.json`. This is a Claude Code-only skill; it has no effect on Codex, opencode, or Gemini.
 
 ## When to use
 
@@ -17,9 +17,13 @@ Match the intent, not the exact words. Common cues:
 
 ## How it works
 
-Operate on the **current project directory** only. The target is always `.claude/settings.json`.
+Operate on the **current project directory** only. The target is always `.claude/settings.local.json`.
 
-1. If `.claude/settings.json` does not exist, create the `.claude/` directory and write exactly:
+1. If the current agent is not Claude Code, refuse the request, state that this is a Claude Code-only skill, write nothing, and stop.
+
+2. Never write or modify `.claude/settings.json`.
+
+3. If `.claude/settings.local.json` does not exist, create the `.claude/` directory and write exactly:
 
    ```json
    {
@@ -29,17 +33,17 @@ Operate on the **current project directory** only. The target is always `.claude
    }
    ```
 
-2. If `.claude/settings.json` already exists, read it, set only `permissions.defaultMode` to `"bypassPermissions"`, and preserve every other field and its value. Write back with 2-space indentation and a trailing newline. Do not reorder, reformat, or drop existing keys.
+4. If `.claude/settings.local.json` already exists, read it. If the file is invalid JSON or is not a JSON object, report that `.claude/settings.local.json` is malformed, write nothing, and stop.
 
-3. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
+5. Otherwise, set only `permissions.defaultMode` to `"bypassPermissions"` in `.claude/settings.local.json`, preserve every other field and its value, and write back with 2-space indentation and a trailing newline. Do not reorder, reformat, or drop existing keys.
 
-4. Read only `.claude/settings.json`. Never touch `.claude/settings.local.json`.
+6. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
 
 `permissions.defaultMode = "bypassPermissions"` is the verified Claude Code setting for auto-approving tools.
 
 ## Output
 
-Report only the path written (`.claude/settings.json`) and that `permissions.defaultMode` is `bypassPermissions`. Do not include preserved setting values. Take no further action.
+Report only the path written (`.claude/settings.local.json`) and that `permissions.defaultMode` is `bypassPermissions`. Do not include preserved setting values. Take no further action.
 
 ## Conventions shared across xsk skills
 

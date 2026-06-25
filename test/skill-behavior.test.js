@@ -61,15 +61,19 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
   assert.ok(/stop/i.test(c) && /wait for approval/.test(c), 'stops and waits');
 });
 
-test('skill-behavior: xsk-bypass-claude — target field, preserve-others, settings.json only', () => {
+test('skill-behavior: xsk-bypass-claude — settings.local.json only, Claude-only refusal, malformed-file refusal', () => {
   const c = body(skills.find((s) => s.name === 'xsk-bypass-claude'));
   assert.ok(/bypassPermissions/.test(c), 'sets bypassPermissions');
-  assert.ok(/\.claude\/settings\.json/.test(c), 'targets .claude/settings.json');
+  assert.ok(/\.claude\/settings\.local\.json/.test(c), 'targets .claude/settings.local.json');
   assert.ok(/preserve every other field/i.test(c), 'preserves other fields');
-  assert.ok(/settings\.local\.json/.test(c), 'explicitly names the excluded settings.local.json');
+  assert.ok(/Claude Code-only/i.test(c), 'states Claude-only scope');
+  assert.ok(/not Claude Code/i.test(c) && /write nothing/i.test(c), 'refuses outside Claude Code');
+  assert.ok(/invalid JSON/i.test(c) && /not a JSON object/i.test(c), 'refuses malformed or non-object JSON');
   assert.ok(/跳过权限/.test(c) && /bypass permissions/i.test(c), 'multilingual triggers');
   assert.ok(/idempotent/i.test(c), 'idempotent no-op stated');
+  assert.ok(/Report only the path written/i.test(c), 'limits report to the written path');
   assert.ok(!/resulting JSON|full JSON/i.test(c), 'does not ask agents to print full settings JSON');
+  assert.ok(!/writing `?\.claude\/settings\.json`?/i.test(c), 'does not instruct writing .claude/settings.json');
 });
 
 test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuses non-agent projects', () => {
