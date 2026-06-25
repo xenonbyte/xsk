@@ -671,6 +671,7 @@ test('install: refuses a previous manifest with an out-of-root installed path an
   const outsideFile = path.join(outsideDir, 'SKILL.md');
   fs.mkdirSync(outsideDir, { recursive: true });
   fs.writeFileSync(outsideFile, 'outside content');
+  const outsideBefore = fs.statSync(outsideFile);
 
   const { create, write } = require('../lib/manifest');
   const manifest = create('claude', '0.1.0', {
@@ -692,6 +693,24 @@ test('install: refuses a previous manifest with an out-of-root installed path an
   );
 
   assert.strictEqual(fs.readFileSync(outsideFile, 'utf8'), 'outside content', 'outside file untouched');
+  const outsideAfter = fs.statSync(outsideFile);
+  assert.deepStrictEqual(
+    {
+      ino: outsideAfter.ino,
+      size: outsideAfter.size,
+      mtimeMs: outsideAfter.mtimeMs,
+      ctimeMs: outsideAfter.ctimeMs,
+      birthtimeMs: outsideAfter.birthtimeMs,
+    },
+    {
+      ino: outsideBefore.ino,
+      size: outsideBefore.size,
+      mtimeMs: outsideBefore.mtimeMs,
+      ctimeMs: outsideBefore.ctimeMs,
+      birthtimeMs: outsideBefore.birthtimeMs,
+    },
+    'outside file stat fingerprint unchanged',
+  );
   assert.strictEqual(fs.readFileSync(manifestFile, 'utf8'), before, 'manifest retained unchanged');
   assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'skill file not written');
 });

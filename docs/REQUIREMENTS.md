@@ -77,7 +77,7 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 **Triggers**: "出方案", "给方案", "怎么设计", "用什么方案", "判断一下", "有没有必要", "值不值得", "plan this", "how should I", "should we keep this".
 
-**Behavior**: No code, no scaffolding, no pseudo-code until the user approves. Give one recommended approach with rationale; mention one alternative only if the tradeoff is genuinely close. Surface blocking ambiguities as one-sentence questions. Output an Approved Design Summary, then stop.
+**Behavior**: No code, no scaffolding, no pseudo-code until the user approves. Give one recommended approach with rationale; mention one alternative only if the tradeoff is genuinely close. Surface blocking ambiguities as one-sentence questions. Output a Proposed Design Summary, then stop.
 
 **Output**: one recommended direction or handoff plan; execution starts only on explicit approval.
 
