@@ -17,3 +17,5 @@ Execution BASE: 7592a575d789cc0c003d2f49d34b2183d348463c
 - [ ] PLAN-TASK-011 README discovery-alias disclosure after the verification gate
 - [ ] PLAN-TASK-012 xsk-think output heading wording
 - [ ] PLAN-TASK-013 Full verification sweep
+
+Task 1: complete (commits 7592a57..029835d, review clean)
