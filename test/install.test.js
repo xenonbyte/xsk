@@ -112,6 +112,26 @@ test('install: refuses a pre-existing symlink skill directory before writing thr
   assert.ok(!fs.existsSync(path.join(outside, MARKER)), 'outside target marker not written');
 });
 
+test('install: refuses a symlinked platform root before writing through it', () => {
+  const sb = freshSandbox();
+  const outside = path.join(sb.home, 'outside-root-target');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.symlinkSync(outside, sb.claudeRoot);
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /symlink/i,
+  );
+  assert.ok(!fs.existsSync(path.join(outside, 'xsk-think', 'SKILL.md')), 'outside target not written');
+  assert.ok(!fs.existsSync(path.join(outside, 'xsk-think', MARKER)), 'outside target marker not written');
+});
+
 test('install: re-install over an owned file does not create a new backup', () => {
   const sb = freshSandbox();
   const opts = {
@@ -124,6 +144,37 @@ test('install: re-install over an owned file does not create a new backup', () =
   install(opts);
   const manifest = read('claude', { xskRoot: sb.xskRoot });
   assert.deepStrictEqual(manifest.backups, [], 'second install creates no backup (file is owned)');
+});
+
+test('install: failed re-install rollback preserves a pre-existing owned install', () => {
+  const sb = freshSandbox();
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
+  const markerFile = path.join(sb.claudeRoot, 'xsk-think', MARKER);
+  const originalSkill = fs.readFileSync(skillFile, 'utf8');
+  const originalMarker = fs.readFileSync(markerFile, 'utf8');
+  const blockingPath = path.join(sb.claudeRoot, 'xsk-write-req');
+  fs.writeFileSync(blockingPath, 'blocking file');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think'), get('xsk-write-req')],
+      }),
+    /EEXIST|ENOTDIR|EISDIR|file/,
+  );
+
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), originalSkill, 'pre-existing SKILL.md preserved');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), originalMarker, 'pre-existing marker preserved');
 });
 
 test('install: re-install preserves the manifest record for an original displaced backup', () => {
@@ -147,6 +198,55 @@ test('install: re-install preserves the manifest record for an original displace
   const secondManifest = read('claude', { xskRoot: sb.xskRoot });
   assert.deepStrictEqual(secondManifest.backups, firstManifest.backups);
   assert.strictEqual(fs.readFileSync(secondManifest.backups[0].backup, 'utf8'), userContent);
+});
+
+test('install: refuses to overwrite an invalid previous manifest', () => {
+  const sb = freshSandbox();
+  const manifestDir = path.join(sb.xskRoot, 'manifests');
+  const manifestFile = path.join(manifestDir, 'claude.manifest');
+  fs.mkdirSync(manifestDir, { recursive: true });
+  const invalidManifest = JSON.stringify({ schema_version: 1 });
+  fs.writeFileSync(manifestFile, invalidManifest);
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /manifest.*shape validation|invalid/i,
+  );
+
+  assert.strictEqual(fs.readFileSync(manifestFile, 'utf8'), invalidManifest, 'invalid manifest left untouched');
+  assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'skill file not written');
+});
+
+test('install: user-owned skill directories are not recorded or retained after uninstall restore', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user-owned custom\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing user directory is not owned');
+
+  const { uninstall } = require('../lib/uninstall');
+  const summary = uninstall({ platforms: ['claude'], xskRoot: sb.xskRoot });
+  assert.strictEqual(summary.exitCode, 0);
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored');
+  assert.ok(!fs.existsSync(path.join(skillDir, MARKER)), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after generated files are gone');
 });
 
 test('install: applies per-skill platform targeting (xsk-think installs to claude)', () => {

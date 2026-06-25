@@ -78,6 +78,33 @@ test('manifest: write creates the manifests dir and round-trips through read', (
   assert.deepStrictEqual(back, m);
 });
 
+test('manifest: failed write leaves the previous manifest intact', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-m-'));
+  const oldManifest = validManifest({ version: '0.1.0' });
+  const newManifest = validManifest({ version: '0.2.0' });
+  const written = write('claude', oldManifest, { xskRoot: tmp });
+  const originalWriteFileSync = fs.writeFileSync;
+  let injected = false;
+
+  fs.writeFileSync = function writePartialThenThrow(target, data, options) {
+    if (!injected && String(target).includes('claude.manifest')) {
+      injected = true;
+      originalWriteFileSync.call(fs, target, '{"schema_version":', options);
+      throw new Error('simulated write failure');
+    }
+    return originalWriteFileSync.call(fs, target, data, options);
+  };
+
+  try {
+    assert.throws(() => write('claude', newManifest, { xskRoot: tmp }), /simulated write failure/);
+  } finally {
+    fs.writeFileSync = originalWriteFileSync;
+  }
+
+  assert.deepStrictEqual(read('claude', { xskRoot: tmp }), oldManifest);
+  assert.strictEqual(path.dirname(written), path.join(tmp, 'manifests'));
+});
+
 test('manifest: manifestPath respects injected xskRoot', () => {
   assert.strictEqual(
     manifestPath('claude', { xskRoot: '/tmp/xskroot' }),
