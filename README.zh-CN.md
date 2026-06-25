@@ -51,7 +51,7 @@ xsk help
 | Skill | Purpose |
 |---|---|
 | `xsk-think` | 把一个粗略想法在写任何代码之前变成 decision-complete 的 plan。蒸馏自 Waza `/think`。 |
-| `xsk-bypass-claude` | 通过写 `.claude/settings.json` 把当前项目设为 Claude Code bypass-permissions 模式。仅 Claude。 |
+| `xsk-bypass-claude` | 通过写 `.claude/settings.local.json` 把当前项目设为 Claude Code bypass-permissions 模式。仅 Claude。 |
 | `xsk-skill-scaffold` | 把一个 agent-skill 项目带到 `xsk` 标准；若不是这类项目则拒绝。 |
 | `xsk-write-req` | 把白话需求转成 `requirements/` 下合规的需求文档，并扎根于当前项目。 |
 | `xsk-archive-req` | 把当前 active 需求文档归档到 `requirements/archive/`。 |

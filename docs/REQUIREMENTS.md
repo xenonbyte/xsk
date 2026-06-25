@@ -87,13 +87,13 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
 
 ### 4.2 `xsk-bypass-claude`
 
-**Purpose**: Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.json`.
+**Purpose**: Set the current project to Claude Code bypass-permissions mode (auto-approve tools) by writing `.claude/settings.local.json`.
 
 **Triggers**: "bypass permissions", "跳过权限", "auto approve", "设置 bypassPermissions", "免确认".
 
 **Behavior**:
-1. Operate on the **current project directory** (`cwd`); the target is `.claude/settings.json`.
-2. If `.claude/settings.json` does not exist, create `.claude/` and write:
+1. Operate on the **current project directory** (`cwd`); the target is `.claude/settings.local.json`. Refuse on non-Claude platforms.
+2. If `.claude/settings.local.json` does not exist, create `.claude/` and write:
    ```json
    {
      "permissions": {
@@ -101,11 +101,11 @@ Build `xsk` — a Node 20 CommonJS CLI that curates a small set of agent skills 
      }
    }
    ```
-3. If it exists, merge in place: set `permissions.defaultMode = "bypassPermissions"`, preserving every other field. Write with 2-space indent and a trailing newline.
+3. If it exists, merge in place: set `permissions.defaultMode = "bypassPermissions"`, preserving every other field. If the file is not a JSON object, refuse without changing it. Write with 2-space indent and a trailing newline.
 4. If `permissions.defaultMode` is already `"bypassPermissions"`, make no change (idempotent no-op).
-5. Report the path written and the resulting JSON. No further action.
+5. Report the path written and the resulting `defaultMode` only. No further action.
 
-`permissions.defaultMode = "bypassPermissions"` is verified against the Claude Code settings schema (see §14); it is the only field this skill writes, and the skill reads only `.claude/settings.json` (not `settings.local.json`).
+`permissions.defaultMode = "bypassPermissions"` is verified against the Claude Code settings schema (see §14); it is the only field this skill writes, and the skill reads only `.claude/settings.local.json`.
 
 **Targeting**: **Claude Code only.** The skill registry marks `platforms: [claude]`. `xsk install --platform codex|opencode|gemini` skips this skill.
 
@@ -370,7 +370,7 @@ Each phase is independently deliverable; the system is usable after each.
 - **Deliverable**: `xsk install` installs a working `xsk-think` into Claude Code.
 
 ### Phase 2 — `xsk-bypass-claude` + remaining 3 platforms
-- `xsk-bypass-claude` source (writes `.claude/settings.json` `permissions.defaultMode`).
+- `xsk-bypass-claude` source (writes `.claude/settings.local.json` `permissions.defaultMode`).
 - Adapters: codex, opencode, gemini.
 - Golden snapshots per platform.
 - `doctor` command.
@@ -420,6 +420,7 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 | D5 | Self-contained zero-dep Node CJS; install/manifest/CLI modeled on a verified 4-platform install pattern, implemented in-repo | reuses a proven mechanism (per-platform homes, atomic write + `rename`, owned-only manifest uninstall, `ok`/`drift`/`invalid` status) without coupling the doc to an external source |
 | D6 | Requirement dir `requirements/`, archive gitignored | clear, version-controlled active docs |
 | D7 | `xsk-bypass-claude` is Claude-only | only sets Claude Code permissions |
+| D10 | `xsk-bypass-claude` writes `.claude/settings.local.json` | keeps bypass scope local to the project while preserving the shared settings file |
 | D8 | `doctor` probes environment + manifest only (Node version, dir writability, manifest validity + recorded-path drift) | pure-instruction skills have no runtime capability to verify, so `doctor` makes no capability claims |
 | D9 | `install` is uninstall-first by default (no opt-out flag) | a reinstall should reach a clean state with no manual `uninstall` and no orphaned skills; the reset reuses the tested owned-only uninstall and rolls back rather than destroying user-edited files. Implemented by routing install through `uninstallPlatform` before regenerating; `MARKER`/`PACKAGE_NAME` + ownership predicates live in `lib/ownership.js` so this introduces no install/uninstall require cycle |
 
