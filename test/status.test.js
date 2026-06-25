@@ -75,7 +75,7 @@ test('status: computeStatus reports ok after a real install (injected roots)', (
     xskRoot,
     skills: [get('xsk-think')],
   });
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'ok');
 });
 
@@ -90,9 +90,24 @@ test('status: computeStatus reports drift when a recorded path is deleted', () =
     skills: [get('xsk-think')],
   });
   fs.rmSync(path.join(claudeRoot, 'xsk-think', 'SKILL.md'), { force: true });
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.length > 0);
+});
+
+test('status: computeStatus reports invalid when a recorded installed path escapes the injected platform root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const escapedPath = path.join(home, 'outside', 'xsk-think', 'SKILL.md');
+  fs.mkdirSync(path.dirname(escapedPath), { recursive: true });
+  fs.writeFileSync(escapedPath, 'escaped skill');
+  write('claude', create('claude', '0.1.0', { installed_paths: [escapedPath] }), { xskRoot });
+
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+
+  assert.strictEqual(result.platforms.claude.state, 'invalid');
+  assert.match(result.platforms.claude.reason, /installed path escapes platform root/);
 });
 
 test('status: computeStatus reports drift when a recorded skill file becomes a directory', () => {
@@ -109,7 +124,7 @@ test('status: computeStatus reports drift when a recorded skill file becomes a d
   fs.rmSync(skillFile, { force: true });
   fs.mkdirSync(skillFile);
 
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(skillFile));
 });
@@ -128,7 +143,7 @@ test('status: computeStatus reports drift when a recorded marker becomes a direc
   fs.rmSync(markerFile, { force: true });
   fs.mkdirSync(markerFile);
 
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(markerFile));
 });
@@ -136,12 +151,13 @@ test('status: computeStatus reports drift when a recorded marker becomes a direc
 test('status: computeStatus reports drift when a recorded owned dir becomes a file', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
   const xskRoot = path.join(home, '.xsk');
+  const claudeRoot = path.join(home, 'claude-skills');
   const skillDir = path.join(home, 'claude-skills', 'xsk-think');
   fs.mkdirSync(path.dirname(skillDir), { recursive: true });
   fs.writeFileSync(skillDir, 'not a directory');
   write('claude', create('claude', '0.1.0', { installed_paths: [skillDir] }), { xskRoot });
 
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(skillDir));
 });
@@ -163,7 +179,7 @@ test('status: computeStatus reports drift when a recorded backup is deleted', ()
   assert.strictEqual(manifest.backups.length, 1, 'install recorded a displaced user backup');
   fs.rmSync(manifest.backups[0].backup, { force: true });
 
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(manifest.backups[0].backup));
 });
@@ -186,7 +202,7 @@ test('status: computeStatus reports drift when a recorded backup becomes a direc
   fs.rmSync(backup, { force: true });
   fs.mkdirSync(backup);
 
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(backup));
 });
@@ -239,7 +255,7 @@ test('status: render text and json both produce output containing the state', ()
     xskRoot,
     skills: [get('xsk-think')],
   });
-  const result = computeStatus({ platforms: ['claude'], xskRoot });
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   const text = render(result, { platforms: ['claude'] });
   assert.ok(/claude: ok/.test(text), 'text contains state');
   const json = render(result, { json: true });
