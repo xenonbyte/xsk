@@ -11,6 +11,7 @@ const { uninstall, uninstallPlatform, PARTIAL_EXIT } = require('../lib/uninstall
 const { read } = require('../lib/manifest');
 const { get } = require('../lib/skills');
 const { MARKER } = require('../lib/install');
+const { safeBackupForSkill } = require('../lib/ownership');
 
 function freshSandbox() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-uninstall-'));
@@ -171,6 +172,28 @@ test('uninstall: refuses unsafe backup paths from a corrupted manifest', () => {
   assert.strictEqual(retry.exitCode, PARTIAL_EXIT, 'second run remains partial while backup path is unsafe');
   assert.ok(retry.refused.includes(skillDir), 'second run still refuses skill dir');
   assert.ok(fs.existsSync(skillFile), 'second run still retains generated skill file');
+});
+
+test('uninstall: refuses backup targets outside skillsRoot', () => {
+  const sb = freshSandbox();
+  const skillFile = path.join(sb.home, 'outside-skill-target.md');
+  const backupDir = path.join(sb.xskRoot, 'install', 'backups', 'claude');
+  const backupFile = path.join(backupDir, 'outside-skill-target.md');
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(backupFile, 'backup content');
+  fs.writeFileSync(skillFile, 'do not overwrite');
+
+  const result = safeBackupForSkill(
+    [{ target: skillFile, backup: backupFile }],
+    skillFile,
+    sb.xskRoot,
+    'claude',
+    sb.claudeRoot,
+  );
+
+  assert.strictEqual(result.unsafe, true, 'outside target is unsafe');
+  assert.deepStrictEqual(result.backup, { target: skillFile, backup: backupFile }, 'matched backup returned');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), 'do not overwrite', 'outside target not overwritten');
 });
 
 test('uninstall: refuses a non-regular marker before mutating generated files', () => {
