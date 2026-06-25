@@ -293,12 +293,12 @@ External platform behavior in this section is verified as of 2026-06-25 against 
 
 - All four auto-discover skills from their skills dir; each skill is a `<name>/SKILL.md` folder (not arbitrary `**/SKILL.md` wildcard scanning).
 - Codex user skills use the agent-compatible `~/.agents/skills/` directory. Current Codex docs do not require a `--enable skills` launch flag; Codex detects skill changes automatically, with restart as the fallback if a new skill does not appear.
-- Gemini is **full**: native SKILL.md skill-directory support, auto-discovered from `~/.gemini/skills/` and the `~/.agents/skills/` alias. Same SKILL.md artifact as the other three platforms.
+- Gemini is **full**: native SKILL.md skill-directory support. Official Gemini CLI docs verify both user and workspace discovery tiers, including the `~/.gemini/skills/` / `.gemini/skills/` native locations and the compatible `~/.agents/skills/` / `.agents/skills/` aliases. Same SKILL.md artifact as the other three platforms.
 - Frontmatter/source metadata: every generated `SKILL.md` has at least `name` (lowercase, hyphenated, ≤64 chars, matches folder) and `description` (required, covers what + when). `when_to_use` and `dispatch_intent` are source metadata that adapters may render into supported frontmatter, body text, or platform metadata.
 - opencode recognizes only `name`, `description`, `license`, `compatibility`, and string-to-string `metadata` in frontmatter; unknown fields are ignored. The opencode adapter must not rely on `when_to_use` or `dispatch_intent` as recognized opencode frontmatter.
 - Alias collision rule: because Gemini and opencode can also read `~/.agents/skills/`, the generated skill body and required frontmatter must be platform-neutral. Platform-specific extras must be optional metadata or sidecar files; core behavior cannot depend on a field that another selected platform ignores.
 - `xsk-bypass-claude` installs to Claude only; other platforms skip it (`platforms: [claude]` in the registry).
-- opencode is Claude-skill-compatible: it also auto-loads `~/.claude/skills/` and agent-compatible `~/.agents/skills/`. `xsk` still installs opencode's copy under `~/.config/opencode/skills/` so each platform's install is independently owned and cleanly uninstallable. (A consequence: a Claude-only skill in `~/.claude/skills/` is also visible to opencode; `xsk-bypass-claude`'s body targets Claude settings and is inert elsewhere.)
+- opencode is Claude-skill-compatible and agent-compatible: official docs verify project/global discovery under `.opencode/skills/` and `~/.config/opencode/skills/`, plus compatible `.claude/skills/`, `~/.claude/skills/`, `.agents/skills/`, and `~/.agents/skills/`. `xsk` still installs opencode's copy under `~/.config/opencode/skills/` so each platform's install is independently owned and cleanly uninstallable. (A consequence: a Claude-only skill in `~/.claude/skills/` is also visible to opencode; `xsk-bypass-claude`'s body targets Claude settings and is inert elsewhere.)
 
 ---
 
@@ -434,8 +434,9 @@ No "Phase 0 investigation" (research done). No phase depends on the next to be u
 - [tw93/Waza `/write`](https://github.com/tw93/Waza/blob/master/skills/write/SKILL.md) — natural-writing style reference.
 - [Fission-AI/OpenSpec `/opsx:explore`](https://github.com/Fission-AI/OpenSpec/blob/master/docs/opsx.md) — fuzzy→requirement exploration model.
 - [Codex Agent Skills](https://developers.openai.com/codex/skills) — Codex SKILL.md native support; user skills live in `$HOME/.agents/skills/<name>/SKILL.md`; current docs do not require a `--enable skills` launch flag.
-- [Gemini CLI Agent Skills](https://geminicli.com/docs/cli/skills/) — Gemini SKILL.md native support confirmation (`~/.gemini/skills/<name>/SKILL.md`).
-- [opencode Agent Skills](https://opencode.ai/docs/skills/) — opencode loads `<name>/SKILL.md` from `~/.config/opencode/skills/` and is Claude-skill-compatible (also reads `~/.claude/skills/`).
+- [Gemini CLI Using Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md) — verified 2026-06-25: user skills are discovered from `~/.gemini/skills/` or the `~/.agents/skills/` alias; workspace skills are discovered from `.gemini/skills/` or the `.agents/skills/` alias.
+- [Gemini CLI Creating Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/creating-skills.md) — verified 2026-06-25: discovery tiers and the `.agents/skills` compatibility alias are documented in the official repository.
+- [opencode Agent Skills](https://opencode.ai/docs/skills/) — verified 2026-06-25: opencode discovers `<name>/SKILL.md` from `.opencode/skills/`, `~/.config/opencode/skills/`, `.claude/skills/`, `~/.claude/skills/`, `.agents/skills/`, and `~/.agents/skills/`.
 - [Claude Code settings](https://docs.claude.com/en/docs/claude-code/settings) — `permissions.defaultMode = "bypassPermissions"` verified.
 
 ---

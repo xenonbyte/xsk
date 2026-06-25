@@ -72,6 +72,14 @@ All four platforms are full and use the same `<name>/SKILL.md` skill-directory s
 
 Platform behavior is verified as of 2026-06-25 against the official docs linked from the source repository's `docs/REQUIREMENTS.md`.
 
+## Discovery aliases and duplicate skills
+
+opencode also reads `~/.claude/skills/<name>/SKILL.md` and `~/.agents/skills/<name>/SKILL.md` in addition to its native `~/.config/opencode/skills/<name>/SKILL.md`. Gemini also reads `~/.agents/skills/<name>/SKILL.md` as an alias for `~/.gemini/skills/<name>/SKILL.md`.
+
+Because those aliases are cross-platform visible, a skill copied into one readable alias directory can also be discovered by another agent. `xsk` still writes one manifest-owned copy per selected platform, so each platform copy stays independently uninstallable even when another platform can also see an alias copy.
+
+`xsk-bypass-claude` remains Claude Code-only. If another agent discovers it through an alias, the skill body refuses or stops inertly outside Claude Code instead of applying Claude-specific behavior.
+
 ## Safety
 
 Installing into user home config dirs is destructive if careless. `xsk` is manifest-backed:

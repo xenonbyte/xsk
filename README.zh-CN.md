@@ -72,6 +72,14 @@ xsk help
 
 平台行为依据源仓库 `docs/REQUIREMENTS.md` 中链接的官方文档，校验日期为 2026-06-25。
 
+## Discovery aliases and duplicate skills
+
+opencode 除了自己的 `~/.config/opencode/skills/<name>/SKILL.md`，也会读取 `~/.claude/skills/<name>/SKILL.md` 与 `~/.agents/skills/<name>/SKILL.md`。Gemini 也会把 `~/.agents/skills/<name>/SKILL.md` 当作 `~/.gemini/skills/<name>/SKILL.md` 的 alias 一并发现。
+
+因为这些 alias 具有 cross-platform visibility，一个放进可读 alias 目录的 skill 也可能被另一个 agent 发现。`xsk` 仍然会按所选平台各写入一份由 manifest 跟踪的 owned 副本，因此即使别的平台也能看见 alias 副本，每个平台自己的副本依然可以 independently uninstallable。
+
+`xsk-bypass-claude` 仍然是 Claude Code-only。若别的 agent 通过 alias 发现它，skill body 会在 Claude Code 之外直接 refuse，或 inertly stop，而不会执行 Claude 专属行为。
+
 ## Safety
 
 向用户 home 配置目录写入若不小心具有破坏性。`xsk` 以 manifest 为后盾：
