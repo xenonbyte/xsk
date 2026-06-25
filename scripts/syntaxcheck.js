@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
-const { readdirSync, statSync } = require('node:fs');
-const { execSync } = require('node:child_process');
+const { readdirSync } = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
@@ -22,7 +22,7 @@ function walk(dir) {
       walk(full);
     } else if (entry.isFile() && entry.name.endsWith('.js')) {
       try {
-        execSync(`node --check ${JSON.stringify(full)}`, { stdio: 'inherit' });
+        execFileSync('node', ['--check', full], { stdio: 'inherit' });
       } catch (e) {
         failed += 1;
       }

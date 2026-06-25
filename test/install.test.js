@@ -91,6 +91,27 @@ test('install: backs up a pre-existing user file and records it in backups[]', (
   assert.strictEqual(fs.readFileSync(backup.backup, 'utf8'), userContent, 'backup preserves user content');
 });
 
+test('install: refuses a pre-existing symlink skill directory before writing through it', () => {
+  const sb = freshSandbox();
+  const outside = path.join(sb.home, 'outside-target');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.mkdirSync(sb.claudeRoot, { recursive: true });
+  fs.symlinkSync(outside, path.join(sb.claudeRoot, 'xsk-think'));
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /symlink/i,
+  );
+  assert.ok(!fs.existsSync(path.join(outside, 'SKILL.md')), 'outside target not written');
+  assert.ok(!fs.existsSync(path.join(outside, MARKER)), 'outside target marker not written');
+});
+
 test('install: re-install over an owned file does not create a new backup', () => {
   const sb = freshSandbox();
   const opts = {
@@ -103,6 +124,29 @@ test('install: re-install over an owned file does not create a new backup', () =
   install(opts);
   const manifest = read('claude', { xskRoot: sb.xskRoot });
   assert.deepStrictEqual(manifest.backups, [], 'second install creates no backup (file is owned)');
+});
+
+test('install: re-install preserves the manifest record for an original displaced backup', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user-owned custom\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const firstManifest = read('claude', { xskRoot: sb.xskRoot });
+  install(opts);
+
+  const secondManifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.deepStrictEqual(secondManifest.backups, firstManifest.backups);
+  assert.strictEqual(fs.readFileSync(secondManifest.backups[0].backup, 'utf8'), userContent);
 });
 
 test('install: applies per-skill platform targeting (xsk-think installs to claude)', () => {

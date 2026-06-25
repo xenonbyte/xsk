@@ -158,6 +158,23 @@ test('doctor: manifest-valid check fails when a manifest is shape-invalid', () =
   assert.strictEqual(result.allPass, false);
 });
 
+test('doctor: manifest-valid checks the default manifest root when xskRoot is omitted', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-default-'));
+  const mock = test.mock.method(os, 'homedir', () => home);
+  try {
+    const dir = path.join(home, '.xsk', 'manifests');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'claude.manifest'), JSON.stringify({ schema_version: 1 }));
+
+    const result = doctor({ platforms: ['claude'], platformRoots: { claude: path.join(home, 'c') } });
+    const m = result.checks.find((c) => c.name === 'manifest-valid');
+    assert.strictEqual(m.pass, false);
+    assert.strictEqual(result.allPass, false);
+  } finally {
+    mock.mock.restore();
+  }
+});
+
 test('doctor: render json parses and includes checks', () => {
   const result = doctor({ platforms: ['claude'], platformRoots: { claude: path.join(os.tmpdir(), 'x') }, xskRoot: path.join(os.tmpdir(), 'none') });
   const { render } = require('../lib/capability');
