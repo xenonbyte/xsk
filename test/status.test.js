@@ -207,6 +207,41 @@ test('status: computeStatus reports drift when a recorded backup becomes a direc
   assert.ok(result.platforms.claude.missing.includes(backup));
 });
 
+test('status: computeStatus reports drift when a recorded backup escapes the backup root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  const outsideBackup = path.join(home, 'outside-backup.bak');
+  fs.writeFileSync(outsideBackup, 'user skill');
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [],
+    backups: [{ target: skillFile, backup: outsideBackup }],
+  }), { xskRoot });
+
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(outsideBackup));
+});
+
+test('status: computeStatus reports drift when a recorded backup target escapes the platform root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const escapedTarget = path.join(home, 'outside', 'xsk-think', 'SKILL.md');
+  const backup = path.join(xskRoot, 'install', 'backups', 'claude', 'xsk-think.SKILL.md.bak');
+  fs.mkdirSync(path.dirname(backup), { recursive: true });
+  fs.writeFileSync(backup, 'user skill');
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [],
+    backups: [{ target: escapedTarget, backup }],
+  }), { xskRoot });
+
+  const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+  assert.strictEqual(result.platforms.claude.state, 'drift');
+  assert.ok(result.platforms.claude.missing.includes(backup));
+});
+
 test('status: computeStatus reports invalid for truncated manifest JSON', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
   const xskRoot = path.join(home, '.xsk');
@@ -383,6 +418,25 @@ test('doctor: manifest-valid check fails when a recorded backup drifts', () => {
   }), { xskRoot });
 
   const result = doctor({ platforms: ['claude'], platformRoots: { claude: path.join(home, 'c') }, xskRoot });
+  const m = result.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(m.pass, false);
+  assert.match(m.detail, /drift/i);
+  assert.strictEqual(result.allPass, false);
+});
+
+test('doctor: manifest-valid check fails when a recorded backup escapes the backup root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
+  const xskRoot = path.join(home, '.xsk');
+  const claudeRoot = path.join(home, 'claude-skills');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  const outsideBackup = path.join(home, 'outside-backup.bak');
+  fs.writeFileSync(outsideBackup, 'user skill');
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [],
+    backups: [{ target: skillFile, backup: outsideBackup }],
+  }), { xskRoot });
+
+  const result = doctor({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   const m = result.checks.find((c) => c.name === 'manifest-valid');
   assert.strictEqual(m.pass, false);
   assert.match(m.detail, /drift/i);

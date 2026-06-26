@@ -652,6 +652,39 @@ test('install: re-install does not re-own a markerless retained skill directory'
   assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after clean uninstall');
 });
 
+test('install: re-install does not back up a markerless generated skill file', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+
+  install(opts);
+  fs.rmSync(markerFile);
+  assert.strictEqual(
+    fs.readFileSync(skillFile, 'utf8'),
+    buildSkill(get('xsk-think')).content,
+    'test setup leaves the generated skill file unchanged',
+  );
+
+  install(opts);
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  assert.deepStrictEqual(manifest.backups, [], 'generated content is not recorded as a user backup');
+
+  const { uninstall } = require('../lib/uninstall');
+  const summary = uninstall({ platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot });
+  assert.strictEqual(summary.exitCode, 0);
+  assert.ok(!fs.existsSync(skillFile), 'generated skill file removed instead of restored from backup');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest removed after clean uninstall');
+});
+
 test('install: uninstall-first prunes a previously-owned skill no longer in the install set', () => {
   const sb = freshSandbox();
   const base = { platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot };

@@ -131,6 +131,49 @@ test('uninstall: manifest removal failure is reported as partial', () => {
   assert.ok(fs.existsSync(mf), 'stale manifest remains visible for retry/status');
 });
 
+test('uninstall: narrowed manifest write failure is partial and rolls back prior removals', () => {
+  const sb = freshSandbox();
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think'), get('xsk-write-req')],
+  });
+  const cleanSkillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const cleanSkillFile = path.join(cleanSkillDir, 'SKILL.md');
+  const cleanMarkerFile = path.join(cleanSkillDir, MARKER);
+  const editedSkillFile = path.join(sb.claudeRoot, 'xsk-write-req', 'SKILL.md');
+  fs.writeFileSync(editedSkillFile, fs.readFileSync(editedSkillFile, 'utf8') + '\n# USER EDIT\n');
+  const mf = manifestPath('claude', { xskRoot: sb.xskRoot });
+  const before = fs.readFileSync(mf, 'utf8');
+  const originalRenameSync = fs.renameSync;
+
+  fs.renameSync = function failNarrowedManifestWrite(from, to) {
+    if (path.resolve(String(to)) === path.resolve(mf)) {
+      throw new Error('simulated narrowed manifest write failure');
+    }
+    return originalRenameSync.call(fs, from, to);
+  };
+
+  let res;
+  try {
+    res = uninstallOnePlatform(sb);
+  } finally {
+    fs.renameSync = originalRenameSync;
+  }
+
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'manifest write failure is not success');
+  assert.strictEqual(res.partial, true);
+  assert.match(res.error, /manifest write failed|simulated narrowed manifest write failure/i);
+  assert.ok(fs.existsSync(cleanSkillDir), 'clean skill dir restored so old manifest is truthful');
+  assert.ok(fs.existsSync(cleanSkillFile), 'clean generated file restored');
+  assert.strictEqual(fs.readFileSync(cleanMarkerFile, 'utf8'), `${PACKAGE_NAME}\n`, 'marker restored');
+  assert.ok(fs.existsSync(editedSkillFile), 'edited retained skill remains in place');
+  assert.strictEqual(fs.readFileSync(mf, 'utf8'), before, 'old manifest remains unchanged after rollback');
+  assert.deepStrictEqual(res.removed, [], 'rollback clears removed tally so it does not over-report');
+  assert.deepStrictEqual(res.restored, [], 'rollback clears restored tally so it does not over-report');
+});
+
 test('uninstall: owned-only removal leaves a third-party file at an unrecorded path untouched', () => {
   const sb = freshSandbox();
   installOne(sb);
@@ -193,6 +236,107 @@ test('uninstall: restores a displaced user file from backup when the generated f
   const res = uninstallOnePlatform(sb);
   assert.ok(res.restored.includes(skillFile), 'user original restored');
   assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'disk matches user original again');
+});
+
+test('uninstall: backup cleanup failure is partial and keeps manifest retryable', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  installOne(sb);
+  const generatedContent = fs.readFileSync(skillFile, 'utf8');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = manifest.backups[0];
+  assert.ok(backup, 'install recorded displaced user file backup');
+  const originalRmSync = fs.rmSync;
+
+  fs.rmSync = function failBackupCleanup(target, options) {
+    if (path.resolve(String(target)) === path.resolve(backup.backup)) {
+      throw new Error('simulated backup cleanup failure');
+    }
+    return originalRmSync.call(fs, target, options);
+  };
+
+  let res;
+  try {
+    res = uninstallOnePlatform(sb);
+  } finally {
+    fs.rmSync = originalRmSync;
+  }
+
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'backup cleanup failure is not success');
+  assert.strictEqual(res.partial, true);
+  assert.match(res.error, /backup cleanup failed|simulated backup cleanup failure/i);
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), generatedContent, 'generated file rolled back for retry');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), `${PACKAGE_NAME}\n`, 'marker remains for retry');
+  assert.ok(fs.existsSync(backup.backup), 'backup remains tracked for retry');
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(narrowed.installed_paths.includes(markerFile), 'retained marker stays in manifest');
+  assert.deepStrictEqual(narrowed.backups, [backup], 'backup record is retained');
+
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after backup cleanup succeeds');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored on retry');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.ok(!fs.existsSync(backup.backup), 'backup removed on retry');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
+});
+
+test('uninstall: backup restore copy failure is partial and keeps manifest retryable', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  installOne(sb);
+  const generatedContent = fs.readFileSync(skillFile, 'utf8');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = manifest.backups[0];
+  assert.ok(backup, 'install recorded displaced user file backup');
+  const originalCopyFileSync = fs.copyFileSync;
+
+  fs.copyFileSync = function failBackupRestore(from, to, mode) {
+    if (
+      path.resolve(String(from)) === path.resolve(backup.backup) &&
+      path.resolve(String(to)) === path.resolve(backup.target)
+    ) {
+      throw new Error('simulated backup restore failure');
+    }
+    return originalCopyFileSync.call(fs, from, to, mode);
+  };
+
+  let res;
+  try {
+    res = uninstallOnePlatform(sb);
+  } finally {
+    fs.copyFileSync = originalCopyFileSync;
+  }
+
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'backup restore failure is not success');
+  assert.strictEqual(res.partial, true);
+  assert.match(res.error, /backup restore failed|simulated backup restore failure/i);
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), generatedContent, 'generated file rolled back for retry');
+  assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), `${PACKAGE_NAME}\n`, 'marker remains for retry');
+  assert.ok(fs.existsSync(backup.backup), 'backup remains tracked for retry');
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(narrowed.installed_paths.includes(markerFile), 'retained marker stays in manifest');
+  assert.deepStrictEqual(narrowed.backups, [backup], 'backup record is retained');
+
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after backup restore succeeds');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored on retry');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.ok(!fs.existsSync(backup.backup), 'backup removed on retry');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
 });
 
 test('uninstall: missing recorded backup is partial and retains generated files', () => {
@@ -258,6 +402,64 @@ test('uninstall: refuses unsafe backup paths from a corrupted manifest', () => {
   assert.strictEqual(retry.exitCode, PARTIAL_EXIT, 'second run remains partial while backup path is unsafe');
   assert.ok(retry.refused.includes(skillDir), 'second run still refuses skill dir');
   assert.ok(fs.existsSync(skillFile), 'second run still retains generated skill file');
+});
+
+test('uninstall: refuses corrupted backup records that do not match an installed skill target', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const backupDir = path.join(sb.xskRoot, 'install', 'backups', 'claude');
+  const backupFile = path.join(backupDir, 'orphan.bak');
+  const outsideTarget = path.join(sb.home, 'outside-skill-target.md');
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(backupFile, 'orphaned backup content');
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  manifest.backups = [{ target: outsideTarget, backup: backupFile }];
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+  const mf = manifestPath('claude', { xskRoot: sb.xskRoot });
+  const before = fs.readFileSync(mf, 'utf8');
+
+  const res = uninstallOnePlatform(sb);
+
+  assert.strictEqual(res.invalid, true);
+  assert.strictEqual(res.exitCode, 1);
+  assert.match(res.error, /backup target escapes platform root/);
+  assert.ok(fs.existsSync(skillDir), 'installed skill dir retained');
+  assert.ok(fs.existsSync(skillFile), 'generated skill file retained');
+  assert.ok(fs.existsSync(backupFile), 'unmatched backup file retained');
+  assert.strictEqual(fs.readFileSync(mf, 'utf8'), before, 'manifest retained unchanged');
+});
+
+test('uninstall: refuses duplicate backup targets before dropping manifest tracking', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n');
+  installOne(sb);
+
+  const outsideBackup = path.join(sb.home, 'outside-backup.bak');
+  fs.writeFileSync(outsideBackup, 'do not discard');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const originalBackup = manifest.backups[0];
+  manifest.backups = [
+    originalBackup,
+    { target: originalBackup.target, backup: outsideBackup },
+  ];
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+  const mf = manifestPath('claude', { xskRoot: sb.xskRoot });
+  const before = fs.readFileSync(mf, 'utf8');
+
+  const res = uninstallOnePlatform(sb);
+
+  assert.strictEqual(res.invalid, true);
+  assert.strictEqual(res.exitCode, 1);
+  assert.match(res.error, /duplicate backup target/);
+  assert.ok(fs.existsSync(skillFile), 'generated skill file retained');
+  assert.strictEqual(fs.readFileSync(outsideBackup, 'utf8'), 'do not discard', 'duplicate backup not touched');
+  assert.strictEqual(fs.readFileSync(mf, 'utf8'), before, 'manifest retained unchanged');
 });
 
 test('uninstall: refuses backup targets outside skillsRoot', () => {
@@ -461,6 +663,32 @@ test('uninstall: refuses to remove a symlink skill dir', () => {
   const res = uninstallOnePlatform(sb);
   assert.ok(res.refused.includes(real), 'symlink dir refused');
   assert.ok(fs.lstatSync(real).isSymbolicLink(), 'symlink left intact');
+});
+
+test('uninstall: refused dangling symlink skill dir remains manifest-tracked for retry', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const linkTarget = path.join(sb.home, 'missing-target');
+  fs.rmSync(path.join(skillDir, MARKER), { force: true });
+  fs.rmSync(path.join(skillDir, 'SKILL.md'), { force: true });
+  fs.rmdirSync(skillDir);
+  fs.symlinkSync(linkTarget, skillDir);
+
+  const res = uninstallOnePlatform(sb);
+
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'dangling symlink refusal is partial');
+  assert.ok(res.refused.includes(skillDir), 'dangling symlink dir refused');
+  assert.ok(fs.lstatSync(skillDir).isSymbolicLink(), 'dangling symlink left intact');
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillDir), 'refused symlink stays manifest-tracked');
+  assert.ok(narrowed.installed_paths.includes(path.join(skillDir, 'SKILL.md')), 'refused skill file path stays manifest-tracked');
+  assert.ok(narrowed.installed_paths.includes(path.join(skillDir, MARKER)), 'refused marker path stays manifest-tracked');
+
+  fs.unlinkSync(skillDir);
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after dangling symlink is removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
 });
 
 test('uninstall: refuses paths with a symlink ancestor', () => {

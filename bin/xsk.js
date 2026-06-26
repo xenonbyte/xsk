@@ -79,6 +79,9 @@ function formatUninstall(summary) {
     if ((r.refused || []).length) {
       line += `; refused ${(r.refused || []).length} symlink(s)`;
     }
+    if (r.partial && r.error) {
+      line += ` - ${r.error}`;
+    }
     lines.push(line);
   }
   return lines.join('\n') + '\n';
