@@ -132,7 +132,7 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
   const required = [
     'package.json', 'LICENSE', 'README.md', 'README.zh-CN.md',
     'bin/xsk.js',
-    'lib/input.js', 'lib/skills.js', 'lib/generator.js', 'lib/install.js',
+    'lib/input.js', 'lib/skills.js', 'lib/generator.js', 'lib/install.js', 'lib/content-hash.js',
     'lib/uninstall.js', 'lib/manifest.js', 'lib/status.js', 'lib/capability.js',
     'lib/adapters/claude.js', 'lib/adapters/codex.js', 'lib/adapters/opencode.js',
     'lib/adapters/gemini.js',

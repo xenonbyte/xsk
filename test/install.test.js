@@ -2,13 +2,14 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { install, installPlatform, PACKAGE_NAME, MARKER } = require('../lib/install');
+const { install, PACKAGE_NAME, MARKER } = require('../lib/install');
 const { buildSkill } = require('../lib/generator');
-const { read, validate } = require('../lib/manifest');
+const { create, read, validate, write } = require('../lib/manifest');
 const { get } = require('../lib/skills');
 
 function freshSandbox() {
@@ -18,6 +19,10 @@ function freshSandbox() {
     claudeRoot: path.join(home, 'claude-skills'),
     xskRoot: path.join(home, '.xsk'),
   };
+}
+
+function sha256(content) {
+  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 test('install: writes xsk-think SKILL.md + .xsk-owned marker under the injected claude root', () => {
@@ -88,6 +93,23 @@ test('install: records every created path in the platform manifest', () => {
   assert.ok(manifest.installed_paths.includes(skillFile), 'manifest lists SKILL.md');
   assert.ok(manifest.installed_paths.includes(markerFile), 'manifest lists marker');
   assert.strictEqual(manifest.platform, 'claude');
+});
+
+test('install: records the installed generated content hash in the platform manifest', () => {
+  const sb = freshSandbox();
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
+  const content = fs.readFileSync(skillFile, 'utf8');
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+
+  assert.deepStrictEqual(manifest.installed_hashes, [{ target: skillFile, sha256: sha256(content) }]);
+  assert.strictEqual(validate(manifest, { expectedPlatform: 'claude' }), true);
 });
 
 test('install: backs up a pre-existing user file and records it in backups[]', () => {
@@ -317,6 +339,28 @@ test('install: re-install refuses to overwrite a user-edited owned skill file', 
   assert.deepStrictEqual(read('claude', { xskRoot: sb.xskRoot }).backups, [], 'no backup record added');
 });
 
+test('install: re-install upgrades a clean owned file that matches its recorded installed hash', () => {
+  const sb = freshSandbox();
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
+  const currentGenerated = buildSkill(get('xsk-think')).content;
+  const oldGenerated = `${currentGenerated}\n# old generated release\n`;
+  fs.writeFileSync(skillFile, oldGenerated);
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  manifest.installed_hashes = [{ target: skillFile, sha256: sha256(oldGenerated) }];
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+
+  install(opts);
+
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), currentGenerated, 'clean old generated body upgraded');
+});
+
 test('install: refuses an invalid ownership marker before adopting matching skill content', () => {
   const sb = freshSandbox();
   const skillDir = path.join(sb.claudeRoot, 'xsk-think');
@@ -497,6 +541,30 @@ test('install: re-install preserves the manifest record for an original displace
   assert.strictEqual(fs.readFileSync(secondManifest.backups[0].backup, 'utf8'), userContent);
 });
 
+test('install: re-install fails instead of carrying forward a missing displaced backup', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user-owned custom\n---\nUSER CONTENT\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  const opts = {
+    platforms: ['claude'],
+    platformRoots: { claude: sb.claudeRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const firstManifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = firstManifest.backups[0].backup;
+  fs.rmSync(backup, { force: true });
+
+  assert.throws(() => install(opts), /missing backup|reuse backup/i);
+  assert.strictEqual(fs.existsSync(backup), false, 'missing backup is not silently recreated');
+  assert.deepStrictEqual(read('claude', { xskRoot: sb.xskRoot }), firstManifest);
+});
+
 test('install: re-install with a missing marker preserves the original displaced backup', () => {
   const sb = freshSandbox();
   const skillDir = path.join(sb.claudeRoot, 'xsk-think');
@@ -602,6 +670,27 @@ test('install: uninstall-first prunes a previously-owned skill no longer in the 
     !manifest.installed_paths.some((p) => p.includes('xsk-write-req')),
     'manifest no longer references the pruned skill',
   );
+});
+
+test('install: uninstall-first prunes a clean previously-owned skill no longer in the catalog', () => {
+  const sb = freshSandbox();
+  const base = { platforms: ['claude'], platformRoots: { claude: sb.claudeRoot }, xskRoot: sb.xskRoot };
+  const droppedDir = path.join(sb.claudeRoot, 'xsk-dropped');
+  const droppedFile = path.join(droppedDir, 'SKILL.md');
+  const droppedMarker = path.join(droppedDir, MARKER);
+  const oldGenerated = '---\nname: xsk-dropped\ndescription: old\n---\nOLD GENERATED\n';
+  fs.mkdirSync(droppedDir, { recursive: true });
+  fs.writeFileSync(droppedFile, oldGenerated);
+  fs.writeFileSync(droppedMarker, `${PACKAGE_NAME}\n`);
+  write('claude', create('claude', '0.1.0', {
+    installed_paths: [droppedDir, droppedFile, droppedMarker],
+    installed_hashes: [{ target: droppedFile, sha256: sha256(oldGenerated) }],
+  }), { xskRoot: sb.xskRoot });
+
+  install(Object.assign({ skills: [get('xsk-think')] }, base));
+
+  assert.ok(!fs.existsSync(droppedDir), 'dropped catalog skill pruned instead of orphaned');
+  assert.ok(fs.existsSync(path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md')), 'requested skill installed');
 });
 
 test('install: uninstall-first restores a displaced user backup when pruning a dropped skill', () => {
@@ -827,10 +916,8 @@ test('install: all four adapters resolve the correct platform skill roots', () =
 });
 
 test('install: default install resolves each platform root via its adapter', () => {
-  const { rootFor } = require('../lib/install');
-  const home = '/tmp/fake-home';
   // default (no injected root) uses adapter.skillsRoot() which reads os.homedir();
-  // here we verify the adapter path structure by injecting home through a temp HOME-less check
+  // verify the adapter path structure without touching the real home dir.
   const codex = require('../lib/adapters/codex.js');
   assert.ok(codex.skillsRoot().includes('agents'));
 });

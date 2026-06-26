@@ -325,7 +325,7 @@ Installing into user home config dirs is destructive if careless.
 └── install/backups/<platform>/          # pre-write originals, for atomic-write rollback and uninstall restore
 ```
 
-Each manifest records: `schema_version`, `platform`, `version` (package version/provenance), `installed_at`, `installed_paths[]` (every file/dir created), and `backups[]` (each `{target, backup}` pair for a pre-existing user file that was displaced). `xsk` writes nowhere under the user's home except the platform skill dirs it installs into and `~/.xsk/` itself.
+Each manifest records: `schema_version`, `platform`, `version` (package version/provenance), `installed_at`, `installed_paths[]` (every file/dir created), `installed_hashes[]` (each `{target, sha256}` pair for generated content as installed), and `backups[]` (each `{target, backup}` pair for a pre-existing user file that was displaced). `xsk` writes nowhere under the user's home except the platform skill dirs it installs into and `~/.xsk/` itself.
 
 Required properties:
 
@@ -334,7 +334,7 @@ Required properties:
 - **Ownership markers gate directory removal.** Drop a marker (e.g. `.xsk-owned`, content = package name) inside each installed skill directory; remove a directory only if it carries a valid marker. Prevents deleting a user/third-party dir at the same path.
 - **Never remove symlinks**; refuse to traverse/remove through them.
 - **Atomic writes.** Write to a staging path, then `rename` into place; on failure restore the original from backup.
-- **Preserve user edits.** If uninstall finds a generated file the user modified, keep it, report a *partial* uninstall, and retain a narrowed manifest so a later uninstall can finish.
+- **Preserve user edits.** If uninstall finds a generated file the user modified, keep it, report a *partial* uninstall, and retain a narrowed manifest so a later uninstall can finish. Modification is detected by hashing the on-disk file and comparing it against the recorded `installed_hashes[]` sha256, so a clean file stays removable even after a package-version change alters the generator output; uninstall falls back to regenerate-and-compare only when the manifest predates the hash record.
 
 `status` is read-only and reports one of `ok` / `drift` / `invalid` per platform. It validates the manifest **shape** (schema version, matching platform, required fields, expected collections), not merely parse success: a truncated-but-parseable manifest reports **invalid**, not "installed"; a manifest whose recorded paths no longer match what is on disk reports **drift**.
 

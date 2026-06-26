@@ -66,6 +66,15 @@ test('manifest: backups entries must have target and backup strings', () => {
   assert.strictEqual(validate(validManifest({ backups: [{ target: 'a', backup: 'b' }] })), true);
 });
 
+test('manifest: installed_hashes is optional but must contain target and sha256 strings when present', () => {
+  const hash = 'a'.repeat(64);
+  assert.strictEqual(validate(validManifest()), true);
+  assert.strictEqual(validate(validManifest({ installed_hashes: [{ target: '/tmp/a/SKILL.md', sha256: hash }] })), true);
+  assert.strictEqual(validate(validManifest({ installed_hashes: 'x' })), false);
+  assert.strictEqual(validate(validManifest({ installed_hashes: [{ target: '/tmp/a/SKILL.md', sha256: 'nope' }] })), false);
+  assert.strictEqual(validate(validManifest({ installed_hashes: [{ target: 1, sha256: hash }] })), false);
+});
+
 test('manifest: operational semantics accept in-root installed paths', () => {
   const skillsRoot = path.join('/tmp', 'x', '.claude', 'skills');
   const manifest = validManifest({
@@ -210,4 +219,5 @@ test('manifest: create builds a valid fresh manifest', () => {
   assert.strictEqual(validate(m), true);
   assert.deepStrictEqual(m.installed_paths, []);
   assert.deepStrictEqual(m.backups, []);
+  assert.deepStrictEqual(m.installed_hashes, []);
 });

@@ -2,15 +2,16 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
 const { install } = require('../lib/install');
 const { uninstall, uninstallPlatform, PARTIAL_EXIT } = require('../lib/uninstall');
-const { read } = require('../lib/manifest');
+const { create, manifestPath, read, write } = require('../lib/manifest');
 const { get } = require('../lib/skills');
-const { MARKER } = require('../lib/install');
+const { MARKER, PACKAGE_NAME } = require('../lib/install');
 const { safeBackupForSkill } = require('../lib/ownership');
 
 function freshSandbox() {
@@ -35,6 +36,13 @@ function uninstallOnePlatform(sb) {
   return uninstallPlatform({ platform: 'claude', xskRoot: sb.xskRoot, skillsRoot: sb.claudeRoot });
 }
 
+function installedHashRecord(target, content) {
+  return {
+    target,
+    sha256: crypto.createHash('sha256').update(content, 'utf8').digest('hex'),
+  };
+}
+
 test('uninstall: removes only manifest-owned generated paths (full round-trip)', () => {
   const sb = freshSandbox();
   installOne(sb);
@@ -51,6 +59,76 @@ test('uninstall: removes only manifest-owned generated paths (full round-trip)',
   );
   assert.ok(!fs.existsSync(path.join(sb.claudeRoot, 'xsk-think')), 'skill dir removed');
   assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest deleted');
+});
+
+test('uninstall: recorded installed hash allows clean removal after generated content changes', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const oldGeneratedContent = fs.readFileSync(skillFile, 'utf8') + '\n# old generated release\n';
+  fs.writeFileSync(skillFile, oldGeneratedContent);
+
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  manifest.installed_hashes = [installedHashRecord(skillFile, oldGeneratedContent)];
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+
+  const res = uninstallOnePlatform(sb);
+
+  assert.strictEqual(res.exitCode, 0, 'recorded hash treats the old generated file as clean');
+  assert.ok(!fs.existsSync(skillDir), 'old generated skill removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest deleted');
+});
+
+test('uninstall: recorded installed hash allows pruning a skill no longer in the catalog', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-dropped');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  const oldGeneratedContent = '---\nname: xsk-dropped\ndescription: old\n---\nOLD GENERATED\n';
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, oldGeneratedContent);
+  fs.writeFileSync(markerFile, `${PACKAGE_NAME}\n`);
+
+  const manifest = create('claude', '0.1.0', {
+    installed_paths: [skillDir, skillFile, markerFile],
+    installed_hashes: [installedHashRecord(skillFile, oldGeneratedContent)],
+  });
+  write('claude', manifest, { xskRoot: sb.xskRoot });
+
+  const res = uninstallOnePlatform(sb);
+
+  assert.strictEqual(res.exitCode, 0, 'dropped clean skill is still uninstallable');
+  assert.ok(!fs.existsSync(skillDir), 'dropped skill pruned');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest deleted');
+});
+
+test('uninstall: manifest removal failure is reported as partial', () => {
+  const sb = freshSandbox();
+  installOne(sb);
+  const skillFile = path.join(sb.claudeRoot, 'xsk-think', 'SKILL.md');
+  const mf = manifestPath('claude', { xskRoot: sb.xskRoot });
+  const originalRmSync = fs.rmSync;
+
+  fs.rmSync = function failManifestRemoval(target, options) {
+    if (path.resolve(String(target)) === path.resolve(mf)) {
+      throw new Error('simulated manifest removal failure');
+    }
+    return originalRmSync.call(fs, target, options);
+  };
+
+  let res;
+  try {
+    res = uninstallOnePlatform(sb);
+  } finally {
+    fs.rmSync = originalRmSync;
+  }
+
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'manifest removal failure is not success');
+  assert.strictEqual(res.partial, true);
+  assert.match(res.error, /manifest removal failed|simulated manifest removal failure/i);
+  assert.ok(!fs.existsSync(skillFile), 'generated file was already removed');
+  assert.ok(fs.existsSync(mf), 'stale manifest remains visible for retry/status');
 });
 
 test('uninstall: owned-only removal leaves a third-party file at an unrecorded path untouched', () => {
@@ -139,7 +217,15 @@ test('uninstall: missing recorded backup is partial and retains generated files'
   const narrowed = read('claude', { xskRoot: sb.xskRoot });
   assert.ok(narrowed, 'manifest kept for later retry');
   assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(!narrowed.installed_paths.includes(skillDir), 'pre-existing dir is not re-owned during partial');
   assert.deepStrictEqual(narrowed.backups, [backup], 'missing backup record is retained');
+
+  fs.writeFileSync(backup.backup, userContent);
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after backup is restored');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored on retry');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
 });
 
 test('uninstall: refuses unsafe backup paths from a corrupted manifest', () => {
@@ -213,6 +299,41 @@ test('uninstall: refuses a non-regular marker before mutating generated files', 
   assert.ok(read('claude', { xskRoot: sb.xskRoot }), 'manifest retained for retry');
 });
 
+test('uninstall: non-regular marker partial preserves displaced backup and original dir ownership for retry', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  installOne(sb);
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = manifest.backups[0];
+  assert.ok(backup, 'install recorded displaced user file backup');
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing skill dir is not owned');
+
+  fs.rmSync(markerFile, { force: true });
+  fs.mkdirSync(markerFile);
+  const res = uninstallOnePlatform(sb);
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'non-regular marker is partial');
+
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
+  assert.ok(narrowed.installed_paths.includes(markerFile), 'retained marker stays in manifest');
+  assert.deepStrictEqual(narrowed.backups, [backup], 'backup record is retained for retry');
+  assert.ok(!narrowed.installed_paths.includes(skillDir), 'pre-existing dir is not re-owned during partial');
+
+  fs.rmSync(markerFile, { recursive: true, force: true });
+  fs.writeFileSync(markerFile, `${PACKAGE_NAME}\n`);
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after marker is repaired');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored on retry');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
+});
+
 test('uninstall: refuses a marker with unexpected content before mutating generated files', () => {
   const sb = freshSandbox();
   installOne(sb);
@@ -229,6 +350,38 @@ test('uninstall: refuses a marker with unexpected content before mutating genera
   const narrowed = read('claude', { xskRoot: sb.xskRoot });
   assert.ok(narrowed.installed_paths.includes(skillFile), 'retained file stays in manifest');
   assert.ok(narrowed.installed_paths.includes(markerFile), 'retained marker stays in manifest');
+});
+
+test('uninstall: invalid marker partial preserves displaced backup and original dir ownership for retry', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(skillDir, { recursive: true });
+  const userContent = '---\nname: xsk-think\ndescription: user\n---\nUSER ORIGINAL\n';
+  fs.writeFileSync(skillFile, userContent);
+
+  installOne(sb);
+  const manifest = read('claude', { xskRoot: sb.xskRoot });
+  const backup = manifest.backups[0];
+  assert.ok(backup, 'install recorded displaced user file backup');
+  assert.ok(!manifest.installed_paths.includes(skillDir), 'pre-existing skill dir is not owned');
+  assert.notStrictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'generated file installed');
+
+  fs.writeFileSync(markerFile, 'not-xsk\n');
+  const res = uninstallOnePlatform(sb);
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'unexpected marker content is partial');
+
+  const narrowed = read('claude', { xskRoot: sb.xskRoot });
+  assert.deepStrictEqual(narrowed.backups, [backup], 'backup record is retained for retry');
+  assert.ok(!narrowed.installed_paths.includes(skillDir), 'pre-existing dir is not re-owned during partial');
+
+  fs.writeFileSync(markerFile, `${PACKAGE_NAME}\n`);
+  const retry = uninstallOnePlatform(sb);
+  assert.strictEqual(retry.exitCode, 0, 'retry finishes after marker is repaired');
+  assert.strictEqual(fs.readFileSync(skillFile, 'utf8'), userContent, 'user original restored on retry');
+  assert.ok(!fs.existsSync(markerFile), 'ownership marker removed');
+  assert.strictEqual(read('claude', { xskRoot: sb.xskRoot }), null, 'manifest cleared after retry');
 });
 
 test('uninstall: user-edited generated file is retained with partial report and narrowed manifest', () => {
