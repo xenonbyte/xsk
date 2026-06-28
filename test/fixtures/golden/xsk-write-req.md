@@ -27,6 +27,7 @@ Match the intent, not the exact words. Common cues:
 
 - A minimal one-liner becomes a concise requirement: Goal, Scope, Acceptance. Do not force a Background section that would be filler.
 - Richer input becomes Background, Goal, Scope (in and out), Requirements, Open Questions, Checkpoints.
+- Open Questions holds only non-blocking items, and each one names its disposition: escalate it to the user to decide (step 5), or defer it to a named owner at a named checkpoint. A choice that would fork the implementation is never parked here. Resolve it inline, or raise it as a decision point.
 
 **5. Decision points go to the user.** When a genuine technical or scoping choice would change the implementation, stop and ask the user to decide. Surface the options and the tradeoffs; let them pick. Do not pick silently.
 
@@ -38,6 +39,7 @@ Match the intent, not the exact words. Common cues:
 
 - **Conflict check:** verify no internal contradictions (Goal versus Scope, in-scope versus out-of-scope, Requirements versus Open Questions, any two statements that cannot both hold). Resolve every conflict, or surface it to the user. A finalized doc contains zero conflicts.
 - **Ambiguity check:** verify no undefined terms, unstated assumptions, or vague qualifiers ("fast", "supported", "as needed") that would force the implementer to guess. Tighten each to a concrete, testable statement. A finalized doc leaves no ambiguity that blocks implementation.
+- **Open-questions check:** verify every Open Question is non-blocking and names a disposition (escalated to the user, or deferred to a named owner at a named checkpoint). Resolve or raise anything that would block or fork implementation before finalizing. A finalized doc parks no blocking or unowned question.
 - **Checkpoint gates:** ensure the requirement defines the verification points where downstream implementation must pause and confirm against the requirement (acceptance criteria, integration gates, review gates). If it lacks them, add them before finalizing.
 - If the audit surfaces issues only the user can resolve, stop, list them, and ask. Do not write a contradictory or under-specified doc.
 
