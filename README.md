@@ -1,5 +1,7 @@
 # xsk
 
+**English** | [简体中文](README.zh-CN.md)
+
 > Curate a small set of agent skills and install them across Claude Code, Codex, opencode, and Gemini, with manifest-backed safety.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)

@@ -1,5 +1,7 @@
 # xsk
 
+[English](README.md) | **简体中文**
+
 > 精选一小组 agent skill，以 manifest 记录作为安全保障，安装到 Claude Code、Codex、opencode 与 Gemini。
 
 [![Node](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)
