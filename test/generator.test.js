@@ -108,7 +108,7 @@ test('generator: xsk-write-req carries self-audit checkpoint and bans em/en dash
 
 test('generator: xsk-archive-req leaves zero active docs', () => {
   const c = buildSkill(get('xsk-archive-req')).content;
-  assert.ok(/requirements\/archive\//.test(c), 'archives into requirements/archive/');
+  assert.ok(/\.xsk\/requirements\/archive\//.test(c), 'archives into .xsk/requirements/archive/');
   assert.ok(/status: archived/.test(c), 'sets status: archived');
 });
 

@@ -53,8 +53,8 @@ Six skills, prefixed `xsk-`:
 | `xsk-think` | Turn a rough idea into a decision-complete plan before any code is written. Distilled from Waza `/think`. |
 | `xsk-bypass-claude` | Set the current project to Claude Code bypass-permissions mode by writing `.claude/settings.local.json`. Claude only. |
 | `xsk-skill-scaffold` | Bring an agent-skill project up to the `xsk` standard, or refuse if it is not one. |
-| `xsk-write-req` | Convert plain-language needs into a compliant requirement doc in `requirements/`, grounded in the current project. |
-| `xsk-archive-req` | Archive the active requirement doc into `requirements/archive/`. |
+| `xsk-write-req` | Convert plain-language needs into a compliant requirement doc in `.xsk/requirements/`, grounded in the current project. |
+| `xsk-archive-req` | Archive the active requirement doc into `.xsk/requirements/archive/`. |
 | `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
 
 `xsk-bypass-claude` targets Claude Code only; `xsk install` skips it on the other three platforms.

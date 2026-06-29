@@ -120,13 +120,13 @@ test('skill-behavior: xsk-archive-req — validates slug, stops on collision, wr
   assert.ok(/\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$/.test(c), 'pins the slug validation regex');
   assert.ok(/missing\/invalid slug/i.test(c), 'refuses a missing or invalid slug');
   assert.ok(/before any write/i.test(c), 'invalid slug stops before any write');
-  assert.ok(/requirements\/archive\/<slug>\.md/.test(c), 'uses the archive target path');
+  assert.ok(/\.xsk\/requirements\/archive\/<slug>\.md/.test(c), 'uses the archive target path');
   assert.ok(/already exists/i.test(c), 'detects archive collisions');
   assert.ok(/ask the user/i.test(c), 'collision path asks the user');
   assert.ok(/writing nothing/i.test(c), 'collision path does not write');
   assert.ok(/status: archived/.test(c), 'sets status: archived');
   assert.ok(/archived_at/.test(c), 'adds archived_at');
-  assert.ok(/requirements\/archive\//.test(c), 'moves to requirements/archive/');
+  assert.ok(/\.xsk\/requirements\/archive\//.test(c), 'moves to .xsk/requirements/archive/');
   assert.ok(/归档需求/.test(c) && /archive requirement/i.test(c), 'multilingual triggers');
   assert.ok(/refuse/i.test(c), 'refuses when there is nothing to archive');
   assert.ok(/confirm it landed/i.test(c), 'confirms the archive write landed');
