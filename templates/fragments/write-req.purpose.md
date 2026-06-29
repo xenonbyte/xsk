@@ -1,1 +1,1 @@
-Convert plain-language ("白话") needs into a compliant requirement document in `requirements/`, grounded in the current project's actual code. The output is a doc an implementer can act on without guessing, not a transcript of the request.
+Convert plain-language ("白话") needs into a compliant requirement document in `.xsk/requirements/`, grounded in the current project's actual code. The output is a doc an implementer can act on without guessing, not a transcript of the request.
