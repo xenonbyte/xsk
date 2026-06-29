@@ -635,10 +635,12 @@ verified per platform, not a hard-coded per-platform recipe.
 
   > User-invocable on every platform, not merely present. Installing a skill must make it
   > invocable on each target platform. Platforms that do not auto-expose skill files as
-  > slash commands (opencode, and Gemini through its `commands/*.toml`) also get a command
-  > file in the platform's command directory, carrying the skill body and the platform's
-  > argument placeholder so invocation arguments are not dropped. Claude exposes skill files
-  > directly. Verify per platform rather than assuming.
+  > slash commands need a verified platform-specific invocation artifact carrying the skill
+  > body and the platform's argument placeholder so invocation arguments are not dropped.
+  > This project currently implements that artifact for opencode as a command file; do not
+  > claim it for another platform until adapter, install, uninstall, status, docs, and tests
+  > all cover that platform. Claude exposes skill files directly. Verify per platform rather
+  > than assuming.
 
 - **R-5.3 Regeneration and house rules.** Regenerate `skills/skill-scaffold/SKILL.md` and
   the masked golden fixture so `golden.test.js` stays green; generated content has no
@@ -650,8 +652,8 @@ verified per platform, not a hard-coded per-platform recipe.
 ### Acceptance & Checkpoints
 
 - **AC-1** The skill-scaffold standard defines platform support as user-invocability, not
-  file presence, and names command-file installation for platforms that do not auto-expose
-  skills as slash commands.
+  file presence, and requires a verified platform-specific invocation artifact for platforms
+  that do not auto-expose skills as slash commands before that support is claimed.
 - **AC-2** The new item reads as a general principle verified per platform, not a hard-coded
   per-platform recipe.
 - **AC-3** `skills/skill-scaffold/SKILL.md` and the golden fixture are regenerated and
@@ -666,8 +668,9 @@ verified per platform, not a hard-coded per-platform recipe.
   instance, keep each reviewable.
 - **D-16.** The standard states a general per-platform-invocability principle (verify per
   platform) rather than enumerating each platform's command recipe, so it stays correct as
-  platforms evolve. This also resolves REQ-004's Gemini/Codex open question at the standard
-  level: any platform that does not auto-expose skills needs a command file.
+  platforms evolve. It records opencode as the only command-file artifact implemented in
+  this project in this batch; Gemini and Codex command exposure remain separate verified
+  implementation decisions.
 - **D-17.** REQ-005 depends on REQ-004 for the concrete recipe the standard describes;
   implementation order is REQ-004 then REQ-005.
 

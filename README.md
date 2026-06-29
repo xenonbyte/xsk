@@ -94,7 +94,7 @@ Installing into user home config dirs is destructive if careless. `xsk` is manif
 - Atomic writes. Each file is written to a temp sibling then renamed into place; a failed write restores the original.
 - User edits preserved. If a generated file was user-modified, uninstall keeps it, reports a partial result, and narrows the retained manifest so a later run can finish.
 
-`xsk` writes only under `~/.xsk/` and the four platform skill dirs.
+`xsk` writes only under `~/.xsk/`, the four platform skill dirs, and opencode's `~/.config/opencode/commands/` command dir.
 
 ## Development
 

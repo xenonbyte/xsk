@@ -94,7 +94,7 @@ opencode 除了自己的 `~/.config/opencode/skills/<name>/SKILL.md`，也会读
 - Atomic writes。每个文件先写入临时同目录文件，再 rename 就位；写入失败时恢复原文件。
 - User edits preserved。若生成的文件被用户修改，uninstall 会保留它、报告 partial，并收窄保留的 manifest，使后续可继续完成。
 
-`xsk` 只在 `~/.xsk/` 与四个平台 skill 目录下写入。
+`xsk` 只在 `~/.xsk/`、四个平台 skill 目录，以及 opencode 的 `~/.config/opencode/commands/` command 目录下写入。
 
 ## Development
 

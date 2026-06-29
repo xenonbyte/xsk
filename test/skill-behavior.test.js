@@ -86,6 +86,8 @@ test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuse
   assert.ok(/Apply on approval/.test(c), 'apply on approval');
   assert.ok(/Four platforms covered/.test(c), 'standard uses coverage-only platform wording');
   assert.ok(/User-invocable on every platform/.test(c), 'standard requires per-platform invocability');
+  assert.ok(/currently implements that artifact for opencode/.test(c), 'standard limits current command artifact claim to opencode');
+  assert.ok(!/Gemini through/.test(c), 'standard does not claim unimplemented Gemini command support');
   assert.ok(/Manifest-backed/.test(c), 'standard includes manifest safety');
   assert.ok(/content-hash modification detection/.test(c), 'standard includes content-hash detection');
   assert.ok(/markerless detection/.test(c), 'standard includes markerless detection');

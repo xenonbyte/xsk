@@ -822,6 +822,33 @@ test('uninstall: opencode prunes a command file whose skill is no longer install
   assert.strictEqual(read('opencode', { xskRoot: sb.xskRoot }), null, 'manifest cleared');
 });
 
+test('uninstall: opencode refuses command-like manifest paths outside the commands root', () => {
+  const sb = opencodeSandbox();
+  const misplacedCommand = path.join(sb.skillsRoot, 'user.md');
+  const content = 'user-authored markdown\n';
+  fs.mkdirSync(path.dirname(misplacedCommand), { recursive: true });
+  fs.writeFileSync(misplacedCommand, content);
+  write('opencode', create('opencode', '0.1.0', {
+    installed_paths: [misplacedCommand],
+    installed_hashes: [installedHashRecord(misplacedCommand, content)],
+  }), { xskRoot: sb.xskRoot });
+  const manifestFile = manifestPath('opencode', { xskRoot: sb.xskRoot });
+  const before = fs.readFileSync(manifestFile, 'utf8');
+
+  const res = uninstallPlatform({
+    platform: 'opencode',
+    xskRoot: sb.xskRoot,
+    skillsRoot: sb.skillsRoot,
+    commandsRoot: sb.commandsRoot,
+  });
+
+  assert.strictEqual(res.invalid, true);
+  assert.strictEqual(res.exitCode, 1);
+  assert.match(res.error, /commands root/);
+  assert.strictEqual(fs.readFileSync(misplacedCommand, 'utf8'), content, 'misplaced markdown file untouched');
+  assert.strictEqual(fs.readFileSync(manifestFile, 'utf8'), before, 'manifest retained unchanged');
+});
+
 test('uninstall: shape-valid manifest with an out-of-root installed path refuses and leaves manifest untouched', () => {
   const sb = freshSandbox();
   const outsideDir = path.join(sb.home, 'outside-skill');

@@ -11,6 +11,7 @@ const { doctor, nodeMajor, isWritableDir, REQUIRED_NODE_MAJOR } = require('../li
 const { install } = require('../lib/install');
 const { write, create, validate } = require('../lib/manifest');
 const { get } = require('../lib/skills');
+const { contentSha256 } = require('../lib/content-hash');
 
 function validManifestObj(overrides) {
   return Object.assign(
@@ -346,6 +347,54 @@ test('status: computeStatus reports drift when an opencode command file is edite
   });
   assert.strictEqual(result.platforms.opencode.state, 'drift');
   assert.ok(result.platforms.opencode.missing.includes(commandFile), 'a command file that is no longer a regular file is drift');
+});
+
+test('status: computeStatus reports drift when an opencode command file is edited', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  fs.appendFileSync(commandFile, '\n# USER EDIT\n');
+
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'drift');
+  assert.ok(result.platforms.opencode.missing.includes(commandFile), 'edited command file reported as drift');
+});
+
+test('status: command-like manifest paths must be under the opencode commands root', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  const misplacedCommand = path.join(skillsRoot, 'user.md');
+  fs.mkdirSync(path.dirname(misplacedCommand), { recursive: true });
+  fs.writeFileSync(misplacedCommand, 'user-authored markdown\n');
+  write('opencode', create('opencode', '0.1.0', {
+    installed_paths: [misplacedCommand],
+    installed_hashes: [{ target: misplacedCommand, sha256: contentSha256('user-authored markdown\n') }],
+  }), { xskRoot });
+
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'invalid');
+  assert.match(result.platforms.opencode.reason, /commands root/);
 });
 
 test('status: a second opencode install then status keeps the manifest valid (not invalid)', () => {
