@@ -1,8 +1,12 @@
 # xsk
 
-Agent skill aggregator（智能体技能聚合器）。`xsk` 精选了一小组 agent skill，并以 manifest 记录作为安全保障，将它们安装到 Claude Code、Codex、opencode 与 Gemini 四个平台。
+> 精选一小组 agent skill，以 manifest 记录作为安全保障，安装到 Claude Code、Codex、opencode 与 Gemini。
 
-Package: `@xenonbyte/xsk` · Binary: `xsk` · Runtime: Node >= 20, CommonJS, 零第三方运行时依赖。
+[![Node](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json)
+
+`xsk`（`@xenonbyte/xsk`）是一个零依赖 CLI，把一组精选的 agent skill 安装到每个受支持的 AI coding agent，并精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
 
 ## Overview
 
@@ -10,23 +14,33 @@ Package: `@xenonbyte/xsk` · Binary: `xsk` · Runtime: Node >= 20, CommonJS, 零
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
+## Features
+
+- **八个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
+- **四个平台，同一形态。** Claude Code、Codex、opencode 与 Gemini 共用 `<name>/SKILL.md` 布局；opencode 还额外获得可直接调用的 `/xsk-<name>` 命令。
+- **manifest 为后盾的安全。** owned-only removal、ownership markers、atomic writes、symlink refusal，以及 content-hash 漂移检测。
+- **uninstall-first 安装。** 重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`。
+- **绝不覆盖用户改动。** 被改过的 owned 文件会被拒绝并回滚，而不会被覆盖。
+- **零运行时依赖。** 纯 Node.js（>= 20），CommonJS。
+
 ## Installation
 
 ```sh
 npm install -g @xenonbyte/xsk
 ```
 
-要求 macOS 或 Linux 上的 Node >= 20。
+> [!IMPORTANT]
+> 要求 macOS 或 Linux 上的 Node >= 20。
 
 ## Usage
 
 ```sh
-xsk install                 # 把所有 skill 安装到所有平台
+xsk install                       # 把所有 skill 安装到所有平台
 xsk install --platform claude,codex
-xsk status                  # 只读：查看每个平台已安装的内容
+xsk status                        # 只读：查看每个平台已安装的内容
 xsk status --json
-xsk uninstall               # 只移除 xsk 创建的内容
-xsk doctor                  # 探测环境与 manifest 健康状况
+xsk uninstall                     # 只移除 xsk 创建的内容
+xsk doctor                        # 探测环境与 manifest 健康状况
 xsk version
 xsk help
 ```
@@ -59,7 +73,8 @@ xsk help
 | `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
 | `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
 
-`xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。
+> [!NOTE]
+> `xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。
 
 ## Platforms
 
@@ -72,9 +87,9 @@ xsk help
 | opencode | `~/.config/opencode/skills/<name>/SKILL.md`（skill）和 `~/.config/opencode/commands/xsk-<name>.md`（command） |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` |
 
-对于 opencode，`xsk install` 会为每个已安装的 skill 同时写入 skill 目录条目和平坦的 `commands/xsk-<name>.md` 命令文件。该命令文件使每个 skill 都可作为 opencode `/xsk-<name>` 命令直接调用。skill 与命令文件均由 manifest 跟踪，卸载时一并移除。
+对于 opencode，`xsk install` 会为每个已安装的 skill 同时写入 skill 目录条目和平坦的 `commands/xsk-<name>.md` 命令文件，使每个 skill 都可作为 opencode `/xsk-<name>` 命令直接调用。skill 与命令文件均由 manifest 跟踪，卸载时一并移除。
 
-平台行为依据源仓库 `docs/REQUIREMENTS.md` 中链接的官方文档，校验日期为 2026-06-25。
+平台行为依据源仓库 `docs/` 下需求规格中链接的官方文档，校验日期为 2026-06-25。
 
 ## Discovery aliases and duplicate skills
 
@@ -86,13 +101,14 @@ opencode 除了自己的 `~/.config/opencode/skills/<name>/SKILL.md`，也会读
 
 ## Safety
 
-向用户 home 配置目录写入若不小心具有破坏性。`xsk` 以 manifest 为后盾：
+> [!WARNING]
+> 向用户 home 配置目录写入若不小心具有破坏性。`xsk` 以 manifest 为后盾，使每次写入都是 owned 且可逆的。
 
-- Owned-only removal。uninstall 只移除 manifest 记录的路径。
-- Ownership markers。每个已安装 skill 目录内有 `.xsk-owned` 标记，目录移除需先校验该标记。
-- No symlink traversal or removal。`xsk` 遇到 symlink 会拒绝。
-- Atomic writes。每个文件先写入临时同目录文件，再 rename 就位；写入失败时恢复原文件。
-- User edits preserved。若生成的文件被用户修改，uninstall 会保留它、报告 partial，并收窄保留的 manifest，使后续可继续完成。
+- **Owned-only removal。** uninstall 只移除 manifest 记录的路径。
+- **Ownership markers。** 每个已安装 skill 目录内有 `.xsk-owned` 标记，目录移除需先校验该标记。
+- **No symlink traversal or removal。** `xsk` 遇到 symlink 会拒绝。
+- **Atomic writes。** 每个文件先写入临时同目录文件，再 rename 就位；写入失败时恢复原文件。
+- **User edits preserved。** 若生成的文件被用户修改，uninstall 会保留它、报告 partial，并收窄保留的 manifest，使后续可继续完成。
 
 `xsk` 只在 `~/.xsk/`、四个平台 skill 目录，以及 opencode 的 `~/.config/opencode/commands/` command 目录下写入。
 
@@ -104,8 +120,8 @@ npm run syntaxcheck # 对 bin/、lib/、test/ 下每个文件执行 node --check
 npm pack --dry-run  # 校验 package 内容
 ```
 
-完整需求规格见源仓库中的 `docs/REQUIREMENTS.md`。
+完整需求规格见源仓库 `docs/` 目录。
 
-## License
+---
 
-MIT
+基于 MIT 许可证发布。见 [LICENSE](LICENSE)。
