@@ -69,8 +69,10 @@ xsk help
 |---|---|
 | Claude Code | `~/.claude/skills/<name>/SKILL.md` |
 | Codex | `~/.agents/skills/<name>/SKILL.md` |
-| opencode | `~/.config/opencode/skills/<name>/SKILL.md` |
+| opencode | `~/.config/opencode/skills/<name>/SKILL.md`（skill）和 `~/.config/opencode/commands/xsk-<name>.md`（command） |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` |
+
+对于 opencode，`xsk install` 会为每个已安装的 skill 同时写入 skill 目录条目和平坦的 `commands/xsk-<name>.md` 命令文件。该命令文件使每个 skill 都可作为 opencode `/xsk-<name>` 命令直接调用。skill 与命令文件均由 manifest 跟踪，卸载时一并移除。
 
 平台行为依据源仓库 `docs/REQUIREMENTS.md` 中链接的官方文档，校验日期为 2026-06-25。
 

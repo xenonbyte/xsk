@@ -209,3 +209,70 @@ test('safety: full install -> status valid -> uninstall -> clean (zero stale fix
   const remaining = fs.existsSync(sb.claudeRoot) ? fs.readdirSync(sb.claudeRoot) : [];
   assert.deepStrictEqual(remaining, [], 'claude skill root left empty after uninstall');
 });
+
+// ============================================================
+// PLAN-TASK-010: opencode command-file safety (SPEC-OPENCODE-001)
+// All tests below route through a platformCommandsRoots temp override
+// so nothing writes to the real ~/.config/opencode/commands/.
+// ============================================================
+
+function sandboxOpencode() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-safety-oc-'));
+  return {
+    home,
+    skillsRoot: path.join(home, 'opencode-skills'),
+    commandsRoot: path.join(home, 'opencode-commands'),
+    xskRoot: path.join(home, '.xsk'),
+  };
+}
+
+test('safety: user-edited opencode command file is retained with partial exit', () => {
+  // Mirror "user-edit preservation" (line ~179) for opencode command files.
+  // A hash-mismatched command file must be retained with exit code 2, and the
+  // narrowed manifest must keep the retained path so a later run can finish.
+  const sb = sandboxOpencode();
+  const opts = {
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const commandFile = path.join(sb.commandsRoot, 'xsk-think.md');
+  fs.writeFileSync(commandFile, fs.readFileSync(commandFile, 'utf8') + '\n# user note\n');
+  const summary = uninstall({
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+  });
+  assert.strictEqual(summary.exitCode, 2, 'partial exit code when command file is user-edited');
+  assert.ok(fs.existsSync(commandFile), 'edited command file retained on disk');
+  const retained = read('opencode', { xskRoot: sb.xskRoot });
+  assert.ok(retained.installed_paths.includes(commandFile), 'narrowed manifest keeps the retained command file');
+});
+
+test('safety: atomic-write rollback — a mid-run command file failure removes command files already written this run', () => {
+  // Mirror "atomic-write rollback" (line ~143) for opencode command files.
+  // Place a directory where xsk-write-req.md must land so the second command
+  // file write fails; the first command file must be rolled back (no orphan).
+  const sb = sandboxOpencode();
+  fs.mkdirSync(sb.commandsRoot, { recursive: true });
+  fs.mkdirSync(path.join(sb.commandsRoot, 'xsk-write-req.md'));
+  assert.throws(
+    () => install({
+      platforms: ['opencode'],
+      platformRoots: { opencode: sb.skillsRoot },
+      platformCommandsRoots: { opencode: sb.commandsRoot },
+      xskRoot: sb.xskRoot,
+      skills: [get('xsk-think'), get('xsk-write-req')],
+    }),
+    /EISDIR|EEXIST|ENOTDIR|directory/,
+    'install throws when a command file path is occupied by a directory',
+  );
+  assert.ok(
+    !fs.existsSync(path.join(sb.commandsRoot, 'xsk-think.md')),
+    'first command file rolled back after mid-run failure (no stranded orphan)',
+  );
+});

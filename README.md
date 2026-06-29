@@ -69,8 +69,10 @@ All four platforms are full and use the same `<name>/SKILL.md` skill-directory s
 |---|---|
 | Claude Code | `~/.claude/skills/<name>/SKILL.md` |
 | Codex | `~/.agents/skills/<name>/SKILL.md` |
-| opencode | `~/.config/opencode/skills/<name>/SKILL.md` |
+| opencode | `~/.config/opencode/skills/<name>/SKILL.md` (skill) and `~/.config/opencode/commands/xsk-<name>.md` (command) |
 | Gemini | `~/.gemini/skills/<name>/SKILL.md` |
+
+For opencode, `xsk install` writes both a skill directory entry and a flat `commands/xsk-<name>.md` command file for each installed skill. The command file makes each skill directly invocable as an opencode `/xsk-<name>` command. Both the skill and the command file are manifest-tracked and uninstall removes them together.
 
 Platform behavior is verified as of 2026-06-25 against the official docs linked from the source repository's `docs/REQUIREMENTS.md`.
 

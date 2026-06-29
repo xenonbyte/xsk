@@ -14,6 +14,9 @@ const { execSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const { main } = require('../bin/xsk');
+const { install } = require('../lib/install');
+const { read: readManifest } = require('../lib/manifest');
+const { skills: allSkillsRegistry } = require('../lib/skills');
 
 function exists(rel) {
   return fs.existsSync(path.join(ROOT, rel));
@@ -155,4 +158,47 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
     f.includes('fixtures/golden'),
   );
   assert.deepStrictEqual(excluded, [], 'no dev/test/tooling paths are packed');
+});
+
+test('self-conformance: opencode command files land and are tracked after a direct install()', () => {
+  // SPEC-OPENCODE-001: call install() directly with platformRoots + platformCommandsRoots
+  // (NOT through bin/xsk.js main(), which does not forward platformCommandsRoots) so the
+  // assertion stays hermetic and writes only to temp dirs.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-self-conf-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  try {
+    const opencodeSkills = allSkillsRegistry.filter((s) => s.platforms.includes('opencode'));
+    install({
+      platforms: ['opencode'],
+      platformRoots: { opencode: skillsRoot },
+      platformCommandsRoots: { opencode: commandsRoot },
+      xskRoot,
+      skills: opencodeSkills,
+    });
+
+    // Every opencode skill must have a command file under commandsRoot.
+    for (const skill of opencodeSkills) {
+      const commandFile = path.join(commandsRoot, `${skill.name}.md`);
+      assert.ok(fs.existsSync(commandFile), `command file exists: ${skill.name}`);
+    }
+
+    // Every command file must appear in installed_paths and installed_hashes.
+    const manifest = readManifest('opencode', { xskRoot });
+    assert.ok(manifest, 'opencode manifest written');
+    for (const skill of opencodeSkills) {
+      const commandFile = path.join(commandsRoot, `${skill.name}.md`);
+      assert.ok(
+        manifest.installed_paths.includes(commandFile),
+        `manifest tracks command file path: ${skill.name}`,
+      );
+      assert.ok(
+        (manifest.installed_hashes || []).some((h) => h.target === commandFile),
+        `manifest records command file hash: ${skill.name}`,
+      );
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
