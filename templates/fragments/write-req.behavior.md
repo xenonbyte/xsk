@@ -10,7 +10,7 @@
 - Richer input becomes Background, Goal, Scope (in and out), Requirements, Open Questions, Checkpoints.
 - Open Questions holds only non-blocking items, and each one names its disposition: escalate it to the user to decide (step 5), or defer it to a named owner at a named checkpoint. A choice that would fork the implementation is never parked here. Resolve it inline, or raise it as a decision point.
 
-**5. Decision points go to the user.** When a genuine technical or scoping choice would change the implementation, stop and ask the user to decide. Surface the options and the tradeoffs; let them pick. Do not pick silently.
+**5. Decision points go to the user, resolved one at a time.** When a genuine technical or scoping choice would change the implementation, stop and ask the user to decide: surface the options and the tradeoffs, let them pick, do not pick silently. When several genuine decisions exist, take them in dependency order rather than all at once. Surface the most upstream open one first, fold the answer in, then re-derive what remains before surfacing the next. A resolved decision often removes or reshapes the forks beneath it, so never surface a fork whose options still depend on an open decision.
 
 **6. Brainstorm the genuinely open-ended.** Where the need is open-ended, run a short exploration with the user before writing.
 
@@ -22,7 +22,7 @@
 - **Ambiguity check:** verify no undefined terms, unstated assumptions, or vague qualifiers ("fast", "supported", "as needed") that would force the implementer to guess. Tighten each to a concrete, testable statement. A finalized doc leaves no ambiguity that blocks implementation.
 - **Open-questions check:** verify every Open Question is non-blocking and names a disposition (escalated to the user, or deferred to a named owner at a named checkpoint). Resolve or raise anything that would block or fork implementation before finalizing. A finalized doc parks no blocking or unowned question.
 - **Checkpoint gates:** ensure the requirement defines the verification points where downstream implementation must pause and confirm against the requirement (acceptance criteria, integration gates, review gates). If it lacks them, add them before finalizing.
-- If the audit surfaces issues only the user can resolve, stop, list them, and ask. Do not write a contradictory or under-specified doc.
+The audit is a loop, not a single pass. If it surfaces issues only the user can resolve, take them one at a time in dependency order (as in step 5), then re-run the checks before finalizing. Repeat until one full pass finds zero conflicts, zero blocking ambiguity, and nothing left for the user to resolve. Do not write a contradictory or under-specified doc.
 
 The document frontmatter:
 
