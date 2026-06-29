@@ -734,6 +734,94 @@ test('uninstall: invalid manifest shape -> refuse, exit non-zero', () => {
   assert.ok(res.exitCode !== 0, 'non-zero on invalid manifest');
 });
 
+function opencodeSandbox() {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-uninstall-oc-'));
+  return {
+    home,
+    skillsRoot: path.join(home, 'opencode-skills'),
+    commandsRoot: path.join(home, 'opencode-commands'),
+    xskRoot: path.join(home, '.xsk'),
+  };
+}
+
+test('uninstall: opencode removes the owned command file and clears the manifest', () => {
+  const sb = opencodeSandbox();
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const commandFile = path.join(sb.commandsRoot, 'xsk-think.md');
+  const skillFile = path.join(sb.skillsRoot, 'xsk-think', 'SKILL.md');
+  assert.ok(fs.existsSync(commandFile), 'command file installed');
+
+  const summary = uninstall({
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+  });
+  assert.strictEqual(summary.exitCode, 0, 'clean uninstall exit 0');
+  assert.ok(summary.platforms.opencode.removed.includes(commandFile), 'command file reported removed');
+  assert.ok(!fs.existsSync(commandFile), 'command file removed from disk');
+  assert.ok(!fs.existsSync(skillFile), 'skill file removed from disk');
+  assert.ok(fs.existsSync(sb.commandsRoot), 'shared commands dir not removed');
+  assert.strictEqual(read('opencode', { xskRoot: sb.xskRoot }), null, 'manifest deleted');
+});
+
+test('uninstall: opencode retains a user-edited command file and keeps it manifest-tracked', () => {
+  const sb = opencodeSandbox();
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const commandFile = path.join(sb.commandsRoot, 'xsk-think.md');
+  const edited = fs.readFileSync(commandFile, 'utf8') + '\n# USER EDIT\n';
+  fs.writeFileSync(commandFile, edited);
+
+  const res = uninstallPlatform({
+    platform: 'opencode',
+    xskRoot: sb.xskRoot,
+    skillsRoot: sb.skillsRoot,
+    commandsRoot: sb.commandsRoot,
+  });
+  assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'edited command file forces partial');
+  assert.ok(res.retained.includes(commandFile), 'edited command file reported retained');
+  assert.strictEqual(fs.readFileSync(commandFile, 'utf8'), edited, 'edited command file preserved');
+
+  const narrowed = read('opencode', { xskRoot: sb.xskRoot });
+  assert.ok(narrowed, 'narrowed manifest persisted');
+  assert.ok(narrowed.installed_paths.includes(commandFile), 'narrowed manifest still tracks the command file');
+  assert.ok(
+    narrowed.installed_hashes.some((h) => h.target === commandFile),
+    'narrowed manifest keeps the command file hash',
+  );
+});
+
+test('uninstall: opencode prunes a command file whose skill is no longer installed', () => {
+  const sb = opencodeSandbox();
+  const base = {
+    platforms: ['opencode'],
+    platformRoots: { opencode: sb.skillsRoot },
+    platformCommandsRoots: { opencode: sb.commandsRoot },
+    xskRoot: sb.xskRoot,
+  };
+  install(Object.assign({ skills: [get('xsk-think'), get('xsk-write-req')] }, base));
+  const droppedCommand = path.join(sb.commandsRoot, 'xsk-write-req.md');
+  assert.ok(fs.existsSync(droppedCommand), 'both command files installed');
+
+  const summary = uninstall(base);
+  assert.strictEqual(summary.exitCode, 0, 'clean uninstall removes every owned command file');
+  assert.ok(!fs.existsSync(droppedCommand), 'dropped skill command file removed');
+  assert.ok(!fs.existsSync(path.join(sb.commandsRoot, 'xsk-think.md')), 'retained skill command file removed too');
+  assert.strictEqual(read('opencode', { xskRoot: sb.xskRoot }), null, 'manifest cleared');
+});
+
 test('uninstall: shape-valid manifest with an out-of-root installed path refuses and leaves manifest untouched', () => {
   const sb = freshSandbox();
   const outsideDir = path.join(sb.home, 'outside-skill');

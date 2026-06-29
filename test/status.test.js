@@ -274,6 +274,103 @@ test('status: computeStatus reports invalid for shape-invalid installed_paths wi
   assert.strictEqual(result.platforms.claude.installedCount, undefined);
 });
 
+test('status: computeStatus reports ok for an opencode install including the command file', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'ok');
+  // installedCount counts skill files only, not the flat command file.
+  assert.strictEqual(result.platforms.opencode.installedCount, 1);
+});
+
+test('status: computeStatus reports drift when an opencode command file goes missing', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  fs.rmSync(commandFile, { force: true });
+
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'drift');
+  assert.ok(result.platforms.opencode.missing.includes(commandFile), 'missing command file reported as drift');
+});
+
+test('status: computeStatus reports drift when an opencode command file is edited into a directory', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  fs.rmSync(commandFile, { force: true });
+  fs.mkdirSync(commandFile);
+
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'drift');
+  assert.ok(result.platforms.opencode.missing.includes(commandFile), 'a command file that is no longer a regular file is drift');
+});
+
+test('status: a second opencode install then status keeps the manifest valid (not invalid)', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  const opts = {
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  install(opts);
+  const result = computeStatus({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+  assert.strictEqual(result.platforms.opencode.state, 'ok', 'second install + status does not flip to invalid');
+});
+
 test('status: computeStatus reports not-installed when no manifest', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
   const result = computeStatus({ platforms: ['claude'], xskRoot: path.join(home, '.xsk') });

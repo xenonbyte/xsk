@@ -948,6 +948,136 @@ test('install: all four adapters resolve the correct platform skill roots', () =
   assert.strictEqual(gemini.skillsRoot({ home }), path.join(home, '.gemini', 'skills'));
 });
 
+test('install: only the opencode adapter resolves a commands root (honoring the home override)', () => {
+  const claude = require('../lib/adapters/claude.js');
+  const codex = require('../lib/adapters/codex.js');
+  const opencode = require('../lib/adapters/opencode.js');
+  const gemini = require('../lib/adapters/gemini.js');
+  const home = '/tmp/fake-home';
+  assert.strictEqual(opencode.commandsRoot({ home }), path.join(home, '.config', 'opencode', 'commands'));
+  assert.strictEqual(typeof claude.commandsRoot, 'undefined', 'claude has no commands root');
+  assert.strictEqual(typeof codex.commandsRoot, 'undefined', 'codex has no commands root');
+  assert.strictEqual(typeof gemini.commandsRoot, 'undefined', 'gemini has no commands root');
+});
+
+test('install: opencode writes a commands/<name>.md command file recorded + hashed, additive to the skills dir', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  // Additive: the skills-directory install is unchanged.
+  const skillFile = path.join(skillsRoot, 'xsk-think', 'SKILL.md');
+  const markerFile = path.join(skillsRoot, 'xsk-think', MARKER);
+  assert.ok(fs.existsSync(skillFile), 'skill SKILL.md still installed');
+  assert.ok(fs.existsSync(markerFile), 'skill ownership marker still installed');
+
+  // New: a flat command file under the commands root.
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  assert.ok(fs.existsSync(commandFile), 'command file written under commands root');
+  assert.ok(!fs.existsSync(path.join(commandsRoot, 'xsk-think', MARKER)), 'command file carries no ownership marker');
+
+  const commandContent = fs.readFileSync(commandFile, 'utf8');
+  const skillContent = buildSkill(get('xsk-think')).content;
+  assert.ok(commandContent.startsWith(skillContent), 'command body begins with the generated skill content');
+  assert.ok(/^description: /m.test(commandContent), 'command frontmatter carries description');
+  assert.ok(commandContent.includes('## opencode invocation arguments'), 'command appends the invocation section');
+  assert.ok(commandContent.includes('Use these arguments when running the skill above:'), 'command references the skill above');
+  assert.ok(/```text\n\$ARGUMENTS\n```/.test(commandContent), 'command appends a fenced $ARGUMENTS block');
+  assert.ok(commandContent.includes('If no arguments were supplied, follow the default usage.'), 'command notes the no-args default');
+
+  const manifest = read('opencode', { xskRoot });
+  assert.strictEqual(validate(manifest, { expectedPlatform: 'opencode' }), true);
+  assert.ok(manifest.installed_paths.includes(commandFile), 'manifest records the command path');
+  assert.ok(
+    manifest.installed_hashes.some((h) => h.target === commandFile && h.sha256 === sha256(commandContent)),
+    'manifest records the command content hash',
+  );
+  assert.ok(
+    !manifest.backups.some((b) => b.target === commandFile || b.backup === commandFile),
+    'command file has no backup record',
+  );
+});
+
+test('install: opencode refuses to clobber a user-edited command file and rolls back', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  const opts = {
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  };
+  install(opts);
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  const edited = fs.readFileSync(commandFile, 'utf8') + '\n# USER EDIT\n';
+  fs.writeFileSync(commandFile, edited);
+
+  assert.throws(() => install(opts), /command|user-edited|drift/i);
+  assert.strictEqual(fs.readFileSync(commandFile, 'utf8'), edited, 'user-edited command file preserved');
+});
+
+test('install: opencode does not clobber a pre-existing user command file absent from any manifest', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  fs.mkdirSync(commandsRoot, { recursive: true });
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  fs.writeFileSync(commandFile, 'user-authored command\n');
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['opencode'],
+        platformRoots: { opencode: skillsRoot },
+        platformCommandsRoots: { opencode: commandsRoot },
+        xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /command|user|overwrite/i,
+  );
+  assert.strictEqual(fs.readFileSync(commandFile, 'utf8'), 'user-authored command\n', 'user command file preserved');
+  assert.ok(!fs.existsSync(path.join(skillsRoot, 'xsk-think', 'SKILL.md')), 'skill write rolled back on command refusal');
+  assert.strictEqual(read('opencode', { xskRoot }), null, 'no manifest written');
+});
+
+test('install: opencode uninstall-first prunes the command file of a dropped skill', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  const base = {
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  };
+  install(Object.assign({ skills: [get('xsk-think'), get('xsk-write-req')] }, base));
+  const wrCommand = path.join(commandsRoot, 'xsk-write-req.md');
+  assert.ok(fs.existsSync(wrCommand), 'both command files written initially');
+
+  install(Object.assign({ skills: [get('xsk-think')] }, base));
+
+  assert.ok(fs.existsSync(path.join(commandsRoot, 'xsk-think.md')), 'retained command file kept');
+  assert.ok(!fs.existsSync(wrCommand), 'dropped skill command file pruned (no orphan)');
+  const manifest = read('opencode', { xskRoot });
+  assert.ok(
+    !manifest.installed_paths.some((p) => p.includes('xsk-write-req')),
+    'manifest no longer references the pruned skill command',
+  );
+});
+
 test('install: default install resolves each platform root via its adapter', () => {
   // default (no injected root) uses adapter.skillsRoot() which reads os.homedir();
   // verify the adapter path structure without touching the real home dir.
@@ -964,9 +1094,10 @@ test('install: bypass-claude installs only under the Claude root, skipped on oth
     gemini: path.join(home, 'gemini-skills'),
   };
   const xskRoot = path.join(home, '.xsk');
+  const commandsRoots = { opencode: path.join(home, 'opencode-commands') };
   const { skills: allSkills } = require('../lib/skills');
 
-  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, xskRoot, skills: allSkills });
+  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, platformCommandsRoots: commandsRoots, xskRoot, skills: allSkills });
 
   assert.ok(
     fs.existsSync(path.join(roots.claude, 'xsk-bypass-claude', 'SKILL.md')),
@@ -989,9 +1120,10 @@ test('install: claude gets all 8 skills; codex/opencode/gemini get 7 (no bypass-
     gemini: path.join(home, 'gemini-skills'),
   };
   const xskRoot = path.join(home, '.xsk');
+  const commandsRoots = { opencode: path.join(home, 'opencode-commands') };
   const { skills: allSkills } = require('../lib/skills');
 
-  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, xskRoot, skills: allSkills });
+  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, platformCommandsRoots: commandsRoots, xskRoot, skills: allSkills });
 
   const countSkillMd = (root) => {
     let n = 0;
@@ -1021,14 +1153,18 @@ test('install: full install + status + uninstall round-trip across all four plat
     gemini: path.join(home, 'gemini-skills'),
   };
   const xskRoot = path.join(home, '.xsk');
+  const commandsRoots = { opencode: path.join(home, 'opencode-commands') };
+  const opencodeCommand = path.join(commandsRoots.opencode, 'xsk-think.md');
   const { skills: allSkills } = require('../lib/skills');
   const { computeStatus } = require('../lib/status');
   const { uninstall } = require('../lib/uninstall');
 
-  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, xskRoot, skills: allSkills });
+  install({ platforms: ['claude', 'codex', 'opencode', 'gemini'], platformRoots: roots, platformCommandsRoots: commandsRoots, xskRoot, skills: allSkills });
+  assert.ok(fs.existsSync(opencodeCommand), 'opencode command file written during round-trip');
   let status = computeStatus({
     platforms: ['claude', 'codex', 'opencode', 'gemini'],
     platformRoots: roots,
+    platformCommandsRoots: commandsRoots,
     xskRoot,
   });
   assert.strictEqual(status.platforms.claude.state, 'ok');
@@ -1039,15 +1175,18 @@ test('install: full install + status + uninstall round-trip across all four plat
   const summary = uninstall({
     platforms: ['claude', 'codex', 'opencode', 'gemini'],
     platformRoots: roots,
+    platformCommandsRoots: commandsRoots,
     xskRoot,
   });
   assert.strictEqual(summary.exitCode, 0);
   for (const p of ['claude', 'codex', 'opencode', 'gemini']) {
     assert.ok(!fs.existsSync(path.join(roots[p], 'xsk-think')), `${p} skill dir removed`);
   }
+  assert.ok(!fs.existsSync(opencodeCommand), 'opencode command file removed on uninstall');
   status = computeStatus({
     platforms: ['claude', 'codex', 'opencode', 'gemini'],
     platformRoots: roots,
+    platformCommandsRoots: commandsRoots,
     xskRoot,
   });
   for (const p of ['claude', 'codex', 'opencode', 'gemini']) {
