@@ -6,7 +6,7 @@ Package: `@xenonbyte/xsk` · Binary: `xsk` · Runtime: Node >= 20, CommonJS, 零
 
 ## Overview
 
-跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处、缺少统一的安装 / manifest / 安全方案。`xsk` 同时解决这两点。它内置六个精选 skill（两个从第三方蒸馏而来，四个原创），并提供一个 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，再精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
+跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处、缺少统一的安装 / manifest / 安全方案。`xsk` 同时解决这两点。它内置八个精选 skill（两个从第三方蒸馏而来，六个原创），并提供一个 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，再精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
@@ -46,7 +46,7 @@ xsk help
 
 ## Skills
 
-共六个 skill，统一前缀 `xsk-`：
+共八个 skill，统一前缀 `xsk-`：
 
 | Skill | Purpose |
 |---|---|
@@ -56,6 +56,8 @@ xsk help
 | `xsk-write-req` | 把白话需求转成 `.xsk/requirements/` 下合规的需求文档，并扎根于当前项目。 |
 | `xsk-archive-req` | 把当前 active 需求文档归档到 `.xsk/requirements/archive/`。 |
 | `xsk-check` | 在改动合入前评审：范围漂移、hard stops、证据门控的发现项，再验证后签收。蒸馏自 Waza `/check`。 |
+| `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
+| `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
 
 `xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。
 

@@ -980,7 +980,7 @@ test('install: bypass-claude installs only under the Claude root, skipped on oth
   }
 });
 
-test('install: claude gets all 6 skills; codex/opencode/gemini get 5 (no bypass-claude)', () => {
+test('install: claude gets all 8 skills; codex/opencode/gemini get 7 (no bypass-claude)', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-count-'));
   const roots = {
     claude: path.join(home, 'claude-skills'),
@@ -1006,10 +1006,10 @@ test('install: claude gets all 6 skills; codex/opencode/gemini get 5 (no bypass-
     return n;
   };
 
-  assert.strictEqual(countSkillMd(roots.claude), 6, 'claude has 6 skills');
-  assert.strictEqual(countSkillMd(roots.codex), 5, 'codex has 5 skills');
-  assert.strictEqual(countSkillMd(roots.opencode), 5, 'opencode has 5 skills');
-  assert.strictEqual(countSkillMd(roots.gemini), 5, 'gemini has 5 skills');
+  assert.strictEqual(countSkillMd(roots.claude), 8, 'claude has 8 skills');
+  assert.strictEqual(countSkillMd(roots.codex), 7, 'codex has 7 skills');
+  assert.strictEqual(countSkillMd(roots.opencode), 7, 'opencode has 7 skills');
+  assert.strictEqual(countSkillMd(roots.gemini), 7, 'gemini has 7 skills');
 });
 
 test('install: full install + status + uninstall round-trip across all four platforms', () => {

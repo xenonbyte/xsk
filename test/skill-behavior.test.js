@@ -153,6 +153,32 @@ test('skill-behavior: xsk-check — diff review, hard stops, evidence gate, veri
   assert.ok(!/persona-catalog|check-update|🥷|\.\.\//.test(c), 'no Waza-internal references');
 });
 
+test('skill-behavior: xsk-point: grounds first, decision-complete plan, persists to .xsk/points/', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-point'));
+  assert.ok(/Research one aspect/.test(c), 'purpose stated');
+  assert.ok(/decision-complete/.test(c), 'decision-complete requirement');
+  assert.ok(/\.xsk\/points\//.test(c), 'persists to .xsk/points/');
+  assert.ok(/status: researching/.test(c), 'uses status: researching');
+  assert.ok(/status: ready/.test(c), 'promotes to status: ready');
+  assert.ok(/status: dropped/.test(c), 'uses status: dropped on drop');
+  assert.ok(/write-before-remove/.test(c), 'write-before-remove on drop');
+  assert.ok(/研究一下/.test(c) && /spike this/.test(c), 'multilingual triggers');
+  assert.ok(/\.xsk\/points\/archive\//.test(c), 'archives dropped points');
+});
+
+test('skill-behavior: xsk-consume-point: scans points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-consume-point'));
+  assert.ok(/\.xsk\/points\//.test(c), 'reads from .xsk/points/');
+  assert.ok(/xsk-write-req/.test(c), 'hands off to xsk-write-req');
+  assert.ok(/single-active requirement/.test(c), 'guards the single-active requirement');
+  assert.ok(/list the offending paths/i.test(c), 'lists offending paths');
+  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
+  assert.ok(/status: consumed/.test(c), 'archives folded points as consumed');
+  assert.ok(/write-before-remove/.test(c), 'write-before-remove when archiving');
+  assert.ok(/consumed_at/.test(c), 'adds consumed_at to frontmatter');
+  assert.ok(/把这些 point 变成需求/.test(c) && /consume points/.test(c), 'multilingual triggers');
+});
+
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {
   for (const s of skills) {
     const c = body(s);

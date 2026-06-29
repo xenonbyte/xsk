@@ -6,7 +6,7 @@ Package: `@xenonbyte/xsk` · Binary: `xsk` · Runtime: Node >= 20, CommonJS, zer
 
 ## Overview
 
-Two recurring frictions when working across AI coding agents: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships six curated skills (two distilled from third parties, four original) and a CLI that installs each skill into every supported platform's skill directory, then tracks exactly what it created so uninstall removes only those files.
+Two recurring frictions when working across AI coding agents: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships eight curated skills (two distilled from third parties, six original) and a CLI that installs each skill into every supported platform's skill directory, then tracks exactly what it created so uninstall removes only those files.
 
 `xsk` is itself an agent-skill project and conforms to the same standard its scaffold skill enforces.
 
@@ -46,7 +46,7 @@ Unknown options fail loud with a non-zero exit.
 
 ## Skills
 
-Six skills, prefixed `xsk-`:
+Eight skills, prefixed `xsk-`:
 
 | Skill | Purpose |
 |---|---|
@@ -56,6 +56,8 @@ Six skills, prefixed `xsk-`:
 | `xsk-write-req` | Convert plain-language needs into a compliant requirement doc in `.xsk/requirements/`, grounded in the current project. |
 | `xsk-archive-req` | Archive the active requirement doc into `.xsk/requirements/archive/`. |
 | `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
+| `xsk-point` | Research one aspect of the current project to a decision-complete landed plan and persist it as a point document in `.xsk/points/`. |
+| `xsk-consume-point` | Fold selected `.xsk/points/` documents into one `.xsk/requirements/` doc via `xsk-write-req`, archiving consumed points write-before-remove. |
 
 `xsk-bypass-claude` targets Claude Code only; `xsk install` skips it on the other three platforms.
 
