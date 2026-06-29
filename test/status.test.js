@@ -96,6 +96,41 @@ test('status: computeStatus reports drift when a recorded path is deleted', () =
   assert.ok(result.platforms.claude.missing.length > 0);
 });
 
+test('status: unreadable hashed installed file is reported as drift', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const skillFile = path.join(claudeRoot, 'xsk-think', 'SKILL.md');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  const originalReadFileSync = fs.readFileSync;
+  const readMock = test.mock.method(fs, 'readFileSync', (file, ...args) => {
+    if (String(file) === skillFile) {
+      const err = new Error('EACCES: permission denied');
+      err.code = 'EACCES';
+      throw err;
+    }
+    return originalReadFileSync.call(fs, file, ...args);
+  });
+  try {
+    const status = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+    assert.strictEqual(status.platforms.claude.state, 'drift');
+    assert.ok(status.platforms.claude.missing.includes(skillFile));
+
+    const doctorResult = doctor({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+    const manifest = doctorResult.checks.find((c) => c.name === 'manifest-valid');
+    assert.strictEqual(manifest.pass, false);
+    assert.match(manifest.detail, /drift/i);
+    assert.strictEqual(doctorResult.allPass, false);
+  } finally {
+    readMock.mock.restore();
+  }
+});
+
 test('status: computeStatus reports invalid when a recorded installed path escapes the injected platform root', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
   const claudeRoot = path.join(home, 'claude-skills');
