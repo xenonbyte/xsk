@@ -53,9 +53,14 @@ created_at: <ISO date>
 ---
 ```
 
+**9. Offer to commit, git-aware.** Only after the doc passes the self-audit and is finalized, decide whether to offer a commit. If the project is not a git repository (`git rev-parse --is-inside-work-tree` fails), or the requirement doc is byte-identical to what git already tracks, skip silently and say nothing about committing. Otherwise ask the user once whether to commit this requirement, and act on the answer:
+
+- On yes, commit only the paths this run wrote: the requirement doc, plus `.xsk/.gitignore` if this run created it. Stage those exact paths first, then commit only them: `git add -- <those paths> && git commit -m "docs(xsk): write requirement <slug>" -- <those paths>`. Stage first because a bare `git commit -- <path>` rejects an untracked new doc. Never `git add -A` or `git add .`, so unrelated working-tree changes are never swept in.
+- On no, leave the doc uncommitted and report that it was left for the user to commit.
+
 ## Output
 
-The path of the requirement file, with confirmation that it is now the single active doc.
+The path of the requirement file, with confirmation that it is now the single active doc, and, when a commit was offered, whether the user committed it or left it uncommitted.
 
 ## Conventions shared across xsk skills
 

@@ -111,6 +111,14 @@ test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit,
   assert.ok(/Self-audit checkpoint/.test(c), 'self-audit checkpoint');
   assert.ok(/Conflict check/.test(c) && /Ambiguity check/.test(c), 'conflict + ambiguity checks');
   assert.ok(/写需求/.test(c) && /write a requirement/i.test(c), 'multilingual triggers');
+  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the commit offer on a git repo');
+  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing');
+  // Pins the exact safe command: `git add` first (a bare `git commit -- <path>` rejects an
+  // untracked new doc), then a path-limited commit so unrelated changes are never swept in.
+  assert.ok(
+    /git add -- <those paths> && git commit -m "docs\(xsk\): write requirement <slug>" -- <those paths>/.test(c),
+    'stages explicit paths then path-limits the commit (works on a new untracked doc)',
+  );
   assert.ok(!/\u2014/.test(c), 'no em-dash');
   assert.ok(!/\u2013/.test(c), 'no en-dash');
 });
@@ -139,6 +147,12 @@ test('skill-behavior: xsk-archive-req — validates slug, stops on collision, wr
   assert.ok(/refuse/i.test(c), 'refuses when there is nothing to archive');
   assert.ok(/confirm it landed/i.test(c), 'confirms the archive write landed');
   assert.ok(/remove the source active doc/i.test(c), 'removes the source only after the archive write');
+  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks whether the active doc was git-tracked');
+  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing the archival');
+  assert.ok(
+    /git add -- <the removed active doc path> && git commit -m "docs\(xsk\): archive requirement <slug>" -- <the removed active doc path>/.test(c),
+    'stages the deletion then path-limits the commit',
+  );
 
   const collisionIndex = c.search(/already exists/i);
   const writeIndex = c.search(/write the fully-updated archived content/i);
