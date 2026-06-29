@@ -8,7 +8,13 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { install } = require('../lib/install');
-const { uninstall, uninstallPlatform, PARTIAL_EXIT } = require('../lib/uninstall');
+const {
+  uninstall,
+  uninstallPlatform,
+  removePathForRestore,
+  restorePathState,
+  PARTIAL_EXIT,
+} = require('../lib/uninstall');
 const { create, manifestPath, read, write } = require('../lib/manifest');
 const { get } = require('../lib/skills');
 const { MARKER, PACKAGE_NAME } = require('../lib/install');
@@ -172,6 +178,70 @@ test('uninstall: narrowed manifest write failure is partial and rolls back prior
   assert.strictEqual(fs.readFileSync(mf, 'utf8'), before, 'old manifest remains unchanged after rollback');
   assert.deepStrictEqual(res.removed, [], 'rollback clears removed tally so it does not over-report');
   assert.deepStrictEqual(res.restored, [], 'rollback clears restored tally so it does not over-report');
+});
+
+test('uninstall: rollback restore refuses a symlinked ancestor and never touches the external target', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-rollback-symlink-'));
+  // An external area the owned roots must never reach through a symlink.
+  const outsideDir = path.join(home, 'outside');
+  const outsideFile = path.join(outsideDir, 'victim.txt');
+  fs.mkdirSync(outsideDir, { recursive: true });
+  fs.writeFileSync(outsideFile, 'do-not-touch');
+
+  // A parent that an attacker swapped to a symlink between capture and restore.
+  const ownedParent = path.join(home, 'owned');
+  const linkParent = path.join(home, 'link-parent');
+  fs.mkdirSync(ownedParent, { recursive: true });
+  fs.symlinkSync(outsideDir, linkParent);
+  const throughLink = path.join(linkParent, 'victim.txt'); // resolves into outsideDir
+
+  // removePathForRestore must refuse rather than delete through the symlink.
+  assert.throws(
+    () => removePathForRestore(throughLink),
+    /symlink/i,
+    'removePathForRestore refuses a symlinked ancestor',
+  );
+  assert.ok(fs.existsSync(outsideFile), 'external file not deleted through the symlink');
+  assert.strictEqual(fs.readFileSync(outsideFile, 'utf8'), 'do-not-touch', 'external file content intact');
+
+  // restorePathState (file) must refuse rather than write through the symlink.
+  assert.throws(
+    () => restorePathState(throughLink, { exists: true, type: 'file', content: Buffer.from('evil'), mode: 0o644 }),
+    /symlink/i,
+    'restorePathState refuses to write a file through a symlinked ancestor',
+  );
+  assert.strictEqual(fs.readFileSync(outsideFile, 'utf8'), 'do-not-touch', 'external target not overwritten');
+
+  // restorePathState (directory) must refuse to mkdir through the symlink.
+  const throughLinkDir = path.join(linkParent, 'newdir');
+  assert.throws(
+    () => restorePathState(throughLinkDir, { exists: true, type: 'directory', mode: 0o755 }),
+    /symlink/i,
+    'restorePathState refuses to create a directory through a symlinked ancestor',
+  );
+  assert.ok(!fs.existsSync(path.join(outsideDir, 'newdir')), 'no directory created in the external area');
+
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('uninstall: rollback restore round-trips a captured file under a clean (non-symlink) path', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-rollback-clean-'));
+  const target = path.join(home, 'a', 'b', 'SKILL.md');
+
+  // exists:false -> remove (target absent is a no-op, must not throw).
+  restorePathState(target, { exists: false });
+  assert.ok(!fs.existsSync(target), 'no-op remove leaves target absent');
+
+  // file restore recreates content + parent dirs through real directories.
+  restorePathState(target, { exists: true, type: 'file', content: Buffer.from('hello'), mode: 0o644 });
+  assert.strictEqual(fs.readFileSync(target, 'utf8'), 'hello', 'file content restored');
+
+  // directory restore recreates a directory.
+  const dirTarget = path.join(home, 'c', 'd');
+  restorePathState(dirTarget, { exists: true, type: 'directory', mode: 0o755 });
+  assert.ok(fs.statSync(dirTarget).isDirectory(), 'directory restored');
+
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('uninstall: owned-only removal leaves a third-party file at an unrecorded path untouched', () => {

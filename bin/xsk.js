@@ -2,7 +2,7 @@
 'use strict';
 
 const { parse } = require('../lib/input');
-const { install } = require('../lib/install');
+const { install, isCommandFilePath } = require('../lib/install');
 const { uninstall } = require('../lib/uninstall');
 const { computeStatus, render: renderStatus } = require('../lib/status');
 const { doctor, render: renderDoctor } = require('../lib/capability');
@@ -41,8 +41,12 @@ function formatInstall(summary) {
       continue;
     }
     const skillCount = (r.installed || []).filter((p) => p.endsWith('SKILL.md')).length;
+    const commandCount = (r.installed || []).filter((p) => isCommandFilePath(p)).length;
     const backCount = (r.backups || []).length;
     let line = `${platform}: installed ${skillCount} skill${skillCount === 1 ? '' : 's'}`;
+    if (commandCount > 0) {
+      line += `; installed ${commandCount} command${commandCount === 1 ? '' : 's'}`;
+    }
     if (backCount > 0) {
       line += `; backed up ${backCount} displaced file${backCount === 1 ? '' : 's'}`;
     }
@@ -64,9 +68,13 @@ function formatUninstall(summary) {
       continue;
     }
     const removedCount = (r.removed || []).filter((p) => p.endsWith('SKILL.md')).length;
+    const removedCommandCount = (r.removed || []).filter((p) => isCommandFilePath(p)).length;
     const restoredCount = (r.restored || []).length;
     const retainedCount = (r.retained || []).length;
     let line = `${platform}: removed ${removedCount} skill${removedCount === 1 ? '' : 's'}`;
+    if (removedCommandCount > 0) {
+      line += `; removed ${removedCommandCount} command${removedCommandCount === 1 ? '' : 's'}`;
+    }
     if (restoredCount > 0) {
       line += `, restored ${restoredCount} displaced file${restoredCount === 1 ? '' : 's'}`;
     }

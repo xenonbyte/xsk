@@ -108,6 +108,34 @@ test('cli: install -> status -> uninstall round-trip via injected roots', () => 
   assert.ok(/not-installed/.test(sStatusAfter.getOut()), 'status reports not-installed after uninstall');
 });
 
+test('cli: opencode install/uninstall output reports command-file counts', () => {
+  const opts = fixtureOpts();
+  opts.platformCommandsRoots = { opencode: path.join(opts.home, 'opencode-commands') };
+
+  const sInstall = streams();
+  assert.strictEqual(
+    main(['install', '--platform', 'opencode'], Object.assign({ stdout: sInstall.stdout, stderr: sInstall.stderr }, opts)),
+    0,
+    'opencode install exits 0',
+  );
+  const installOut = sInstall.getOut();
+  const installMatch = installOut.match(/opencode: installed (\d+) skills?; installed (\d+) commands?/);
+  assert.ok(installMatch, `install output reports skill + command counts, got: ${installOut.trim()}`);
+  assert.strictEqual(installMatch[1], installMatch[2], 'one command file per opencode skill');
+  assert.ok(Number(installMatch[2]) > 0, 'at least one command installed');
+
+  const sUninstall = streams();
+  assert.strictEqual(
+    main(['uninstall', '--platform', 'opencode'], Object.assign({ stdout: sUninstall.stdout, stderr: sUninstall.stderr }, opts)),
+    0,
+    'opencode uninstall exits 0',
+  );
+  const uninstallOut = sUninstall.getOut();
+  const uninstallMatch = uninstallOut.match(/opencode: removed (\d+) skills?; removed (\d+) commands?/);
+  assert.ok(uninstallMatch, `uninstall output reports removed skill + command counts, got: ${uninstallOut.trim()}`);
+  assert.strictEqual(uninstallMatch[1], uninstallMatch[2], 'every installed command file removed');
+});
+
 test('cli: doctor runs and exits 0 on a healthy fixture', () => {
   const opts = fixtureOpts();
   const s = streams();

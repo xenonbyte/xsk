@@ -158,6 +158,9 @@ test('skill-behavior: xsk-check — diff review, hard stops, evidence gate, veri
   assert.ok(/regression test/.test(c), 'requires a regression test for bug fixes');
   assert.ok(/看看代码/.test(c) && /code review/i.test(c), 'multilingual triggers');
   assert.ok(/Do not merge, push/.test(c), 'stops without merging or pushing');
+  assert.ok(/Review-only by default/.test(c), 'defaults to review-only');
+  assert.ok(/Do not modify files during a review/.test(c), 'does not edit files during a review');
+  assert.ok(/apply them only when the user explicitly asks/i.test(c), 'applies mechanical fixes only on explicit request');
   assert.ok(!/persona-catalog|check-update|🥷|\.\.\//.test(c), 'no Waza-internal references');
 });
 
@@ -172,6 +175,8 @@ test('skill-behavior: xsk-point: grounds first, decision-complete plan, persists
   assert.ok(/write-before-remove/.test(c), 'write-before-remove on drop');
   assert.ok(/研究一下/.test(c) && /spike this/.test(c), 'multilingual triggers');
   assert.ok(/\.xsk\/points\/archive\//.test(c), 'archives dropped points');
+  assert.ok(/already exists/i.test(c), 'detects an archive collision on drop');
+  assert.ok(/writing nothing/i.test(c), 'collision path writes nothing');
 });
 
 test('skill-behavior: xsk-consume-point: scans ready points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
@@ -190,6 +195,8 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
   assert.ok(/status: consumed/.test(c), 'archives folded points as consumed');
   assert.ok(/write-before-remove/.test(c), 'write-before-remove when archiving');
   assert.ok(/consumed_at/.test(c), 'adds consumed_at to frontmatter');
+  assert.ok(/already exists/i.test(c), 'detects an archive collision before overwriting');
+  assert.ok(/rather than overwriting/i.test(c), 'does not overwrite an existing consumed archive');
   assert.ok(/把这些 point 变成需求/.test(c) && /consume points/.test(c), 'multilingual triggers');
 });
 

@@ -45,7 +45,7 @@ Match the intent, not the exact words. Common cues:
 
 **6. Gate every finding on evidence.** A HIGH or CRITICAL finding needs three things: the exact file and line, the concrete trigger that produces the bad outcome, and why existing guards do not already prevent it. Missing any one, downgrade it or drop it. Do not pad the report with low-confidence noise that trains the reader to ignore the real findings.
 
-**7. Route the fixes.** Apply safe, risk-free fixes (typos, missing imports, obvious style) right away. Batch behavior-changing fixes (added null checks, new error handling) into one confirmation block instead of asking one at a time. Leave architecture and security tradeoffs for the user to decide, and mark informational notes as advisory.
+**7. Route the fixes. Review-only by default.** Do not modify files during a review. List the safe, risk-free mechanical fixes (typos, missing imports, obvious style) separately from the findings, and apply them only when the user explicitly asks for fixes. Batch behavior-changing fixes (added null checks, new error handling) into one confirmation block instead of asking one at a time. Leave architecture and security tradeoffs for the user to decide, and mark informational notes as advisory.
 
 **8. Verify before claiming done.** Run the project's own verification (its tests, lint, type check, build, or syntax check) and read the output. For a bug fix, a regression test that fails on the old code must exist before the fix counts as done. If no verification command is available, say so plainly and call it a gap. Never present unverified work as passing.
 
