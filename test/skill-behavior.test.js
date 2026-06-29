@@ -84,7 +84,13 @@ test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuse
   assert.ok(/Audit/.test(c), 'audit step');
   assert.ok(/Propose/.test(c), 'propose step');
   assert.ok(/Apply on approval/.test(c), 'apply on approval');
+  assert.ok(/Four platforms covered/.test(c), 'standard uses coverage-only platform wording');
+  assert.ok(/User-invocable on every platform/.test(c), 'standard requires per-platform invocability');
   assert.ok(/Manifest-backed/.test(c), 'standard includes manifest safety');
+  assert.ok(/content-hash modification detection/.test(c), 'standard includes content-hash detection');
+  assert.ok(/markerless detection/.test(c), 'standard includes markerless detection');
+  assert.ok(/Built from source/.test(c), 'standard requires built-from-source');
+  assert.ok(/Test coverage spans the install surface/.test(c), 'standard requires install-surface test coverage');
   assert.ok(/uninstall-first/i.test(c), 'standard includes uninstall-first install');
   assert.ok(/项目规范化/.test(c), 'multilingual triggers');
 });

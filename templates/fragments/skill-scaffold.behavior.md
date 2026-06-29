@@ -13,11 +13,14 @@
 - Unknown options fail loud.
 - `status` validates manifest **shape**, not just parse success.
 - Removed or renamed commands leave no stale references (grep-clean across CLI, help, README, generated text, `AGENTS.md`, `CLAUDE.md`).
-- Four platforms, all full: Claude Code, Codex, opencode, Gemini.
-- Manifest-backed install safety: owned-only removal, ownership markers, atomic writes, symlink refusal.
+- Four platforms covered: Claude Code, Codex, opencode, Gemini.
+- User-invocable on every platform, not merely present. Installing a skill must make it invocable on each target platform. Platforms that do not auto-expose skill files as slash commands (opencode, and Gemini through its `commands/*.toml`) also get a command file in the platform's command directory, carrying the skill body and the platform's argument placeholder so invocation arguments are not dropped. Claude exposes skill files directly. Verify per platform rather than assuming.
+- Manifest-backed install safety: owned-only removal, ownership markers, atomic writes, symlink refusal, and content-hash modification detection. The manifest records a hash per owned file; a previously generated install is recognized by that hash even without the marker (markerless detection), so a user-edited owned file is detected and refused or rolled back rather than silently overwritten.
 - `install` is uninstall-first: a reinstall resets the previously-owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed. It still refuses to overwrite a user-edited owned file and rolls back instead of destroying it.
+- Built from source: skills are generated from a single per-skill source, not hand-maintained per platform or per file. The reference composes each skill from per-section fragments (`purpose`, `triggers`, `behavior`, `output`) plus a shared common body and a template, with one registry listing the skills. The build is deterministic, and the committed packed skill output stays byte-for-byte in sync with the generator, enforced by a test. The golden snapshot below is the masked form of that output.
 - A golden snapshot of the generated skill shell, masking embedded `shared/` body.
 - A bilingual README (`README.md` plus `README.zh-CN.md`) with identical headings, English literals preserved, and content-pinning tests.
+- Test coverage spans the install surface, not only generation and docs: install, uninstall, uninstall-first reset, transactional rollback, and the safety refusals (a user-edited owned file, symlinked paths) are exercised by executable tests, alongside the golden snapshot, README parity, and self-conformance tests.
 
 ### Self-conformance
 
