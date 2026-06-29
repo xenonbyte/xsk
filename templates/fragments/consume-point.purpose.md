@@ -1,0 +1,1 @@
+Fold one or more researched point documents from `.xsk/points/` into a single requirement document via `xsk-write-req`. Points that land in the requirement are archived as `consumed`; the rest stay active or are dropped only on user confirmation.
