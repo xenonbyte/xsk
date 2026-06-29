@@ -6,7 +6,7 @@
 
 **4. Hand off to xsk-write-req.** Pass the selected points to `xsk-write-req` as the input need. For each selected point, supply the `## Aspect` and `## Landed plan` as the core input, with `## Research` as supporting context. Do not duplicate or modify the `xsk-write-req` behavior; invoke it by reference. If `xsk-write-req` stops for any reason (blocking decision, user abort, audit failure), archive nothing and leave all points unchanged.
 
-**5. Archive folded points as consumed (write-before-remove).** After the requirement lands successfully, for each selected point that was folded in: set `status: consumed`, add `consumed_at: <ISO date>` and `consumed_by: <requirement-slug>` to the frontmatter, write the updated content to `.xsk/points/archive/<slug>.md`, confirm it landed, then remove `.xsk/points/<slug>.md`. Complete write-before-remove for every folded point before reporting done.
+**5. Archive folded points as consumed (write-before-remove).** After the requirement lands successfully, for each selected point that was folded in: set `status: consumed`, add `consumed_at: <ISO date>` and `consumed_by: .xsk/requirements/<slug>.md` to the frontmatter, write the updated content to `.xsk/points/archive/<slug>.md`, confirm it landed, then remove `.xsk/points/<slug>.md`. Complete write-before-remove for every folded point before reporting done.
 
 **6. Leave excluded and deferred points active.** Points not selected, or points the user deferred, stay in `.xsk/points/` unchanged with their current status.
 
