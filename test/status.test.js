@@ -462,6 +462,52 @@ test('doctor: writable check passes for a creatable temp root', () => {
   assert.strictEqual(w.pass, true);
 });
 
+test('doctor: opencode uses injected commands root for manifest validation', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-oc-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  install({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  const result = doctor({
+    platforms: ['opencode'],
+    platformRoots: { opencode: skillsRoot },
+    platformCommandsRoots: { opencode: commandsRoot },
+    xskRoot,
+  });
+
+  const writableCommands = result.checks.find((c) => c.name === 'writable-opencode-commands');
+  assert.ok(writableCommands);
+  assert.strictEqual(writableCommands.pass, true);
+  const manifest = result.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(manifest.pass, true);
+  assert.strictEqual(result.allPass, true);
+});
+
+test('doctor: opencode commands root must be writable before install writes command files', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-oc-'));
+  const blocker = path.join(home, 'not-a-dir');
+  fs.writeFileSync(blocker, 'blocking file');
+
+  const result = doctor({
+    platforms: ['opencode'],
+    platformRoots: { opencode: path.join(home, 'opencode-skills') },
+    platformCommandsRoots: { opencode: path.join(blocker, 'commands') },
+    xskRoot: path.join(home, '.xsk'),
+  });
+
+  const writableCommands = result.checks.find((c) => c.name === 'writable-opencode-commands');
+  assert.ok(writableCommands);
+  assert.strictEqual(writableCommands.pass, false);
+  assert.strictEqual(result.allPass, false);
+});
+
 test('doctor: writable-xsk-root check fails when xskRoot is not writable', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-doc-'));
   const xskRoot = path.join(home, '.xsk');

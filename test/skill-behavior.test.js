@@ -174,9 +174,15 @@ test('skill-behavior: xsk-point: grounds first, decision-complete plan, persists
   assert.ok(/\.xsk\/points\/archive\//.test(c), 'archives dropped points');
 });
 
-test('skill-behavior: xsk-consume-point: scans points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
+test('skill-behavior: xsk-consume-point: scans ready points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
   const c = body(skills.find((s) => s.name === 'xsk-consume-point'));
   assert.ok(/\.xsk\/points\//.test(c), 'reads from .xsk/points/');
+  assert.ok(/no unarchived point has `status: ready`/.test(c), 'stops when no ready point exists');
+  assert.ok(/Only points with `status: ready` may be selected/.test(c), 'limits selection to ready points');
+  assert.ok(/researching` or otherwise non-ready point, stop without writing or archiving/.test(c),
+    'blocks selecting researching points');
+  assert.ok(!/status: researching` may be selected/.test(c), 'does not allow researching points to be selected');
+  assert.ok(/re-read each selected point and confirm `status: ready`/.test(c), 'rechecks readiness before handoff');
   assert.ok(/xsk-write-req/.test(c), 'hands off to xsk-write-req');
   assert.ok(/single-active requirement/.test(c), 'guards the single-active requirement');
   assert.ok(/list the offending paths/i.test(c), 'lists offending paths');

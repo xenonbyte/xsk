@@ -102,6 +102,7 @@ function main(argv, options) {
 
   const dispatchOptions = {
     platformRoots: opts.platformRoots,
+    platformCommandsRoots: opts.platformCommandsRoots,
     xskRoot: opts.xskRoot,
   };
 

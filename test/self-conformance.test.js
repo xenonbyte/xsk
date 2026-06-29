@@ -14,7 +14,6 @@ const { execSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
 const { main } = require('../bin/xsk');
-const { install } = require('../lib/install');
 const { read: readManifest } = require('../lib/manifest');
 const { skills: allSkillsRegistry } = require('../lib/skills');
 
@@ -55,6 +54,9 @@ function cliFixture() {
       opencode: path.join(home, 'opencode-skills'),
       gemini: path.join(home, 'gemini-skills'),
     },
+    platformCommandsRoots: {
+      opencode: path.join(home, 'opencode-commands'),
+    },
   };
 }
 
@@ -69,6 +71,7 @@ test('self-conformance: the five core CLI commands resolve without crashing', ()
         stderr: s.stderr,
         xskRoot: fixture.xskRoot,
         platformRoots: fixture.platformRoots,
+        platformCommandsRoots: fixture.platformCommandsRoots,
       });
       assert.ok([0, 1, 2].includes(code), `${cmd} resolved (exit ${code})`);
     }
@@ -79,6 +82,7 @@ test('self-conformance: the five core CLI commands resolve without crashing', ()
       stderr: s.stderr,
       xskRoot: fixture.xskRoot,
       platformRoots: fixture.platformRoots,
+      platformCommandsRoots: fixture.platformCommandsRoots,
     });
     assert.strictEqual(code, 0, 'install resolved');
     // clean up the fixture install through the public command first
@@ -87,6 +91,7 @@ test('self-conformance: the five core CLI commands resolve without crashing', ()
       stderr: s.stderr,
       xskRoot: fixture.xskRoot,
       platformRoots: fixture.platformRoots,
+      platformCommandsRoots: fixture.platformCommandsRoots,
     });
   } finally {
     fs.rmSync(fixture.home, { recursive: true, force: true });
@@ -160,23 +165,24 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
   assert.deepStrictEqual(excluded, [], 'no dev/test/tooling paths are packed');
 });
 
-test('self-conformance: opencode command files land and are tracked after a direct install()', () => {
-  // SPEC-OPENCODE-001: call install() directly with platformRoots + platformCommandsRoots
-  // (NOT through bin/xsk.js main(), which does not forward platformCommandsRoots) so the
-  // assertion stays hermetic and writes only to temp dirs.
+test('self-conformance: opencode command files land and are tracked through the CLI', () => {
+  // SPEC-OPENCODE-001: the public CLI dispatch path must forward both
+  // platformRoots and platformCommandsRoots so opencode tests stay hermetic.
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-self-conf-oc-'));
   const skillsRoot = path.join(home, 'opencode-skills');
   const commandsRoot = path.join(home, 'opencode-commands');
   const xskRoot = path.join(home, '.xsk');
   try {
     const opencodeSkills = allSkillsRegistry.filter((s) => s.platforms.includes('opencode'));
-    install({
-      platforms: ['opencode'],
+    const installStreams = capture();
+    const installCode = main(['install', '--platform', 'opencode'], {
+      stdout: installStreams.stdout,
+      stderr: installStreams.stderr,
       platformRoots: { opencode: skillsRoot },
       platformCommandsRoots: { opencode: commandsRoot },
       xskRoot,
-      skills: opencodeSkills,
     });
+    assert.strictEqual(installCode, 0, installStreams.err());
 
     // Every opencode skill must have a command file under commandsRoot.
     for (const skill of opencodeSkills) {
@@ -198,6 +204,30 @@ test('self-conformance: opencode command files land and are tracked after a dire
         `manifest records command file hash: ${skill.name}`,
       );
     }
+
+    const statusStreams = capture();
+    const statusCode = main(['status', '--platform', 'opencode', '--json'], {
+      stdout: statusStreams.stdout,
+      stderr: statusStreams.stderr,
+      platformRoots: { opencode: skillsRoot },
+      platformCommandsRoots: { opencode: commandsRoot },
+      xskRoot,
+    });
+    assert.strictEqual(statusCode, 0, statusStreams.err());
+    assert.strictEqual(JSON.parse(statusStreams.out()).platforms.opencode.state, 'ok');
+
+    const doctorStreams = capture();
+    const doctorCode = main(['doctor', '--platform', 'opencode', '--json'], {
+      stdout: doctorStreams.stdout,
+      stderr: doctorStreams.stderr,
+      platformRoots: { opencode: skillsRoot },
+      platformCommandsRoots: { opencode: commandsRoot },
+      xskRoot,
+    });
+    assert.strictEqual(doctorCode, 0, doctorStreams.err());
+    const doctorResult = JSON.parse(doctorStreams.out());
+    assert.strictEqual(doctorResult.allPass, true);
+    assert.ok(doctorResult.checks.some((c) => c.name === 'writable-opencode-commands' && c.pass));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
