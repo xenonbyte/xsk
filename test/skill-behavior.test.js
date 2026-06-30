@@ -191,6 +191,21 @@ test('skill-behavior: xsk-point: grounds first, decision-complete plan, persists
   assert.ok(/\.xsk\/points\/archive\//.test(c), 'archives dropped points');
   assert.ok(/already exists/i.test(c), 'detects an archive collision on drop');
   assert.ok(/writing nothing/i.test(c), 'collision path writes nothing');
+  // Persist-path commit offer mirrors xsk-write-req: git-gated, asks once, then a
+  // staged path-limited commit so a new untracked doc commits and nothing else is swept in.
+  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the commit offer on a git repo');
+  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing');
+  assert.ok(
+    /git add -- <those paths> && git commit -m "docs\(xsk\): research point <slug>" -- <those paths>/.test(c),
+    'stages explicit paths then path-limits the commit (works on a new untracked doc)');
+  // Drop-path commit offer mirrors xsk-archive-req: tracked-source check, then commit the deletion.
+  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks the dropped point was tracked');
+  assert.ok(
+    /git add -- <the removed point doc path> && git commit -m "docs\(xsk\): drop point <slug>" -- <the removed point doc path>/.test(c),
+    'stages the deletion then path-limits the drop commit');
+  // Stop at the document: research-and-persist only, never proposes or begins code.
+  assert.ok(/only deliverable/i.test(c), 'point doc is the only deliverable');
+  assert.ok(/begin any code change/i.test(c), 'does not begin code changes');
 });
 
 test('skill-behavior: xsk-consume-point: scans ready points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
@@ -212,6 +227,22 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
   assert.ok(/already exists/i.test(c), 'detects an archive collision before overwriting');
   assert.ok(/rather than overwriting/i.test(c), 'does not overwrite an existing consumed archive');
   assert.ok(/把这些 point 变成需求/.test(c) && /consume points/.test(c), 'multilingual triggers');
+  // One combined commit owns the whole fold: write-req's inline offer is suppressed during
+  // the handoff, and consume-point commits the requirement doc plus the consumed-point removals.
+  assert.ok(/suppress its commit offer/.test(c), 'suppresses xsk-write-req inline commit offer');
+  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the consume commit on a git repo');
+  assert.ok(
+    /git add -- <those paths> && git commit -m "docs\(xsk\): consume points into requirement <slug>" -- <those paths>/.test(c),
+    'one combined commit stages explicit paths then path-limits the commit');
+  // Guards the pathspec trap: a consumed point git never tracked is now deleted, so listing it
+  // in `git add` would fail on an unmatched pathspec and abort the whole commit. Filter to tracked.
+  assert.ok(/each removed `\.xsk\/points\/<slug>\.md` that git was tracking/.test(c),
+    'combined consume commit includes only the removed points git was tracking');
+  // Drop-rejected path mirrors xsk-point's drop commit offer.
+  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks a dropped point was tracked');
+  assert.ok(
+    /git add -- <the removed point doc path> && git commit -m "docs\(xsk\): drop point <slug>" -- <the removed point doc path>/.test(c),
+    'stages the deletion then path-limits the drop commit');
 });
 
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {
