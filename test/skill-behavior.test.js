@@ -110,6 +110,19 @@ test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit,
   assert.ok(/decision points go to the user/i.test(c), 'asks user on decisions');
   assert.ok(/Self-audit checkpoint/.test(c), 'self-audit checkpoint');
   assert.ok(/Conflict check/.test(c) && /Ambiguity check/.test(c), 'conflict + ambiguity checks');
+  // No-dropped-content rule: deferred requirement content has no home (no backlog, single active
+  // doc), so the doc must capture the full need rather than parking content as later/phase 2.
+  assert.ok(/Completeness check/.test(c), 'self-audit includes a completeness check');
+  assert.ok(/has no backlog/.test(c) && /lost when the doc is archived/.test(c),
+    'states deferred content has no home and is lost on archive');
+  assert.ok(/Do not split the need into now-versus-later/.test(c),
+    'forbids splitting the need into now-versus-later');
+  assert.ok(/no deferred requirement content/.test(c),
+    'audit loop gates on zero deferred requirement content');
+  // The completeness check flags a Scope-out entry only when it carries wanted work, so a genuine
+  // non-goal boundary (allowed by step 4) is not flagged as dropped content.
+  assert.ok(/a Scope-out entry that is really wanted work rather than a genuine non-goal/.test(c),
+    'completeness check flags Scope-out only when it carries wanted work, not genuine non-goals');
   assert.ok(/写需求/.test(c) && /write a requirement/i.test(c), 'multilingual triggers');
   assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the commit offer on a git repo');
   assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing');
