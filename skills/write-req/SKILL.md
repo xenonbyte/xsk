@@ -21,7 +21,7 @@ Match the intent, not the exact words. Common cues:
 
 **2. Locate or create the active requirement doc.** Scan `.xsk/requirements/*.md` for frontmatter `status: active`. There is **at most one** active doc at a time. If more than one exists, stop, list the offending paths, and report the broken invariant for the user to resolve. If one exists, lock onto it and append or refine. If none exists, create `.xsk/requirements/<slug>.md` with `status: active` and a slug generated from the need.
 
-**3. Ensure the directory convention.** Ensure `.xsk/.gitignore` contains the line `requirements/archive/` (create `.xsk/` and `.xsk/.gitignore` if absent; append only if the line is missing; never overwrite an existing `.xsk/.gitignore`).
+**3. Ensure the directory convention.** Ensure `.xsk/.gitignore` contains the line `requirements/archive/` (create `.xsk/` and `.xsk/.gitignore` if absent; append only if the line is missing; never overwrite an existing `.xsk/.gitignore`). Track `.xsk/.gitignore` as a path this run wrote when this step created it or appended the missing line.
 
 **4. Convert fuzzy into concrete.** Match the document structure to the input richness:
 
@@ -53,9 +53,9 @@ created_at: <ISO date>
 ---
 ```
 
-**9. Offer to commit, git-aware.** Only after the doc passes the self-audit and is finalized, decide whether to offer a commit. If the project is not a git repository (`git rev-parse --is-inside-work-tree` fails), or the requirement doc is byte-identical to what git already tracks, skip silently and say nothing about committing. Otherwise ask the user once whether to commit this requirement, and act on the answer:
+**9. Offer to commit, git-aware.** Only after the doc passes the self-audit and is finalized, decide whether to offer a commit. Build the commit path set from every path this run wrote: the requirement doc, plus `.xsk/.gitignore` if step 3 created it or appended the missing line. If the project is not a git repository (`git rev-parse --is-inside-work-tree` fails), or none of those paths has a change git would record, skip silently and say nothing about committing. Otherwise ask the user once whether to commit this requirement, and act on the answer:
 
-- On yes, commit only the paths this run wrote: the requirement doc, plus `.xsk/.gitignore` if this run created it. Stage those exact paths first, then commit only them: `git add -- <those paths> && git commit -m "docs(xsk): write requirement <slug>" -- <those paths>`. Stage first because a bare `git commit -- <path>` rejects an untracked new doc. Never `git add -A` or `git add .`, so unrelated working-tree changes are never swept in.
+- On yes, commit only that commit path set. Stage those exact paths first, then commit only them: `git add -- <those paths> && git commit -m "docs(xsk): write requirement <slug>" -- <those paths>`. Stage first because a bare `git commit -- <path>` rejects an untracked new doc. Never `git add -A` or `git add .`, so unrelated working-tree changes are never swept in.
 - On no, leave the doc uncommitted and report that it was left for the user to commit.
 
 ## Output
