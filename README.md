@@ -91,7 +91,7 @@ All four platforms are full and use the same `<name>/SKILL.md` skill-directory s
 
 For opencode, `xsk install` writes both a skill directory entry and a flat `commands/xsk-<name>.md` command file for each installed skill, making each skill directly invocable as an opencode `/xsk-<name>` command. Both the skill and the command file are manifest-tracked, and uninstall removes them together.
 
-Platform behavior was verified as of 2026-06-25 against the official docs linked from the source repository's requirement spec under `docs/`.
+Platform behavior was verified as of 2026-06-25 against each platform's official documentation.
 
 ## Discovery aliases and duplicate skills
 
@@ -121,8 +121,6 @@ npm test            # full node:test suite
 npm run syntaxcheck # node --check every bin/, lib/, test/ file
 npm pack --dry-run  # verify package contents
 ```
-
-The full requirement specification lives in the source repository under `docs/`.
 
 ---
 

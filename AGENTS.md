@@ -5,7 +5,7 @@
 - `npm test` - full `node --test` suite (auto-discovers `test/**/*.test.js`).
 - `node --test test/install.test.js` - one file; add `--test-name-pattern="phrase"` for one test.
 - `npm run syntaxcheck` - `node --check` every `.js` under `bin/`, `lib/`, `test/` via `scripts/syntaxcheck.js` (uses `execFileSync`, no shell).
-- `npm pack --dry-run` - verify package contents (only `bin/`, `lib/`, `skills/`, `shared/`, `templates/`, the two READMEs, `LICENSE` ship; `test/`, `docs/`, `.req-to-plan/` are excluded by the `files` field).
+- `npm pack --dry-run` - verify package contents (only `bin/`, `lib/`, `skills/`, `shared/`, `templates/`, the two READMEs, `LICENSE` ship; `test/` and `.req-to-plan/` are excluded by the `files` field).
 
 No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before claiming done.
 

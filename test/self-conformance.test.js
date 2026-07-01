@@ -159,7 +159,6 @@ test('self-conformance: npm pack --dry-run includes sources and excludes dev/tes
     f.startsWith('.drfx') ||
     f.startsWith('.claude/') ||
     f.startsWith('.codegraph') ||
-    f === 'docs/REQUIREMENTS.md' ||
     f.includes('fixtures/golden'),
   );
   assert.deepStrictEqual(excluded, [], 'no dev/test/tooling paths are packed');
