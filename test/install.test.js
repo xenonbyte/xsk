@@ -518,6 +518,93 @@ test('install: rollback restore refuses a swapped symlink target', () => {
   assert.strictEqual(fs.readFileSync(markerFile, 'utf8'), `${PACKAGE_NAME}\n`, 'marker restored');
 });
 
+test('install: rollback cleanup refuses a swapped symlink ancestor for created paths', () => {
+  const sb = freshSandbox();
+  const realRootAfterSwap = path.join(sb.home, 'claude-skills-real');
+  const outsideRoot = path.join(sb.home, 'outside-rollback-root');
+  const outsideSkillDir = path.join(outsideRoot, 'xsk-think');
+  const outsideSkillFile = path.join(outsideSkillDir, 'SKILL.md');
+  const markerFile = path.join(sb.claudeRoot, 'xsk-think', MARKER);
+  fs.mkdirSync(outsideSkillDir, { recursive: true });
+  fs.writeFileSync(outsideSkillFile, 'do not remove');
+
+  const originalRenameSync = fs.renameSync;
+  let swapped = false;
+  fs.renameSync = function swapRootThenFail(from, to) {
+    if (!swapped && to === markerFile) {
+      swapped = true;
+      originalRenameSync.call(fs, sb.claudeRoot, realRootAfterSwap);
+      fs.symlinkSync(outsideRoot, sb.claudeRoot);
+      throw new Error('simulated marker write failure after root swap');
+    }
+    return originalRenameSync.call(fs, from, to);
+  };
+
+  try {
+    assert.throws(
+      () =>
+        install({
+          platforms: ['claude'],
+          platformRoots: { claude: sb.claudeRoot },
+          xskRoot: sb.xskRoot,
+          skills: [get('xsk-think')],
+        }),
+      /simulated marker write failure after root swap/,
+    );
+  } finally {
+    fs.renameSync = originalRenameSync;
+  }
+
+  assert.strictEqual(swapped, true, 'test swapped the platform root before rollback cleanup');
+  assert.strictEqual(fs.readFileSync(outsideSkillFile, 'utf8'), 'do not remove', 'external skill file untouched');
+  assert.ok(fs.lstatSync(sb.claudeRoot).isSymbolicLink(), 'unsafe swapped root left for manual recovery');
+});
+
+test('install: rollback cleanup refuses a swapped symlink ancestor for new backups', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  const backupDir = path.join(sb.xskRoot, 'install', 'backups', 'claude');
+  const realBackupDirAfterSwap = path.join(sb.home, 'real-backups-after-swap');
+  const outsideBackupDir = path.join(sb.home, 'outside-backups');
+  const outsideBackup = path.join(outsideBackupDir, 'xsk-think.SKILL.md.bak');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, 'user skill content');
+  fs.mkdirSync(outsideBackupDir, { recursive: true });
+  fs.writeFileSync(outsideBackup, 'do not remove');
+
+  const originalRenameSync = fs.renameSync;
+  let swapped = false;
+  fs.renameSync = function swapBackupThenFail(from, to) {
+    if (!swapped && to === skillFile) {
+      swapped = true;
+      originalRenameSync.call(fs, backupDir, realBackupDirAfterSwap);
+      fs.symlinkSync(outsideBackupDir, backupDir);
+      throw new Error('simulated skill write failure after backup swap');
+    }
+    return originalRenameSync.call(fs, from, to);
+  };
+
+  try {
+    assert.throws(
+      () =>
+        install({
+          platforms: ['claude'],
+          platformRoots: { claude: sb.claudeRoot },
+          xskRoot: sb.xskRoot,
+          skills: [get('xsk-think')],
+        }),
+      /simulated skill write failure after backup swap/,
+    );
+  } finally {
+    fs.renameSync = originalRenameSync;
+  }
+
+  assert.strictEqual(swapped, true, 'test swapped the backup root before rollback cleanup');
+  assert.strictEqual(fs.readFileSync(outsideBackup, 'utf8'), 'do not remove', 'external backup file untouched');
+  assert.ok(fs.lstatSync(backupDir).isSymbolicLink(), 'unsafe swapped backup root left for manual recovery');
+});
+
 test('install: re-install preserves the manifest record for an original displaced backup', () => {
   const sb = freshSandbox();
   const skillDir = path.join(sb.claudeRoot, 'xsk-think');

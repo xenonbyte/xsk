@@ -138,23 +138,27 @@ test('manifest: write does not follow a swapped temp-file symlink', () => {
   fs.mkdirSync(dir, { recursive: true });
   const victim = path.join(tmp, 'outside-manifest-target');
   fs.writeFileSync(victim, 'do not overwrite');
-  const originalWriteFileSync = fs.writeFileSync;
+  const originalOpenSync = fs.openSync;
   let injected = false;
+  let injectedPath = null;
 
-  fs.writeFileSync = function symlinkThenWrite(target, data, options) {
+  fs.openSync = function symlinkThenOpen(target, flags, mode) {
     if (!injected && typeof target === 'string' && path.basename(target).includes('claude.manifest.tmp-')) {
       injected = true;
+      injectedPath = target;
       fs.symlinkSync(victim, target);
     }
-    return originalWriteFileSync.call(fs, target, data, options);
+    return originalOpenSync.call(fs, target, flags, mode);
   };
 
   try {
     write('claude', validManifest(), { xskRoot: tmp });
   } finally {
-    fs.writeFileSync = originalWriteFileSync;
+    fs.openSync = originalOpenSync;
   }
 
+  assert.strictEqual(injected, true, 'test injected a temp-file symlink before open');
+  assert.ok(injectedPath, 'test captured the injected temp path');
   assert.strictEqual(fs.readFileSync(victim, 'utf8'), 'do not overwrite', 'symlink target not overwritten');
   assert.strictEqual(fs.lstatSync(manifestPath('claude', { xskRoot: tmp })).isSymbolicLink(), false);
 });
