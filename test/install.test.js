@@ -228,6 +228,44 @@ test('install: refuses a pre-existing symlink skill directory before writing thr
   assert.ok(!fs.existsSync(path.join(outside, MARKER)), 'outside target marker not written');
 });
 
+test('install: refuses a non-file existing skill target before reading it', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillFile, { recursive: true });
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /non-file skill file/i,
+  );
+  assert.ok(fs.lstatSync(skillFile).isDirectory(), 'non-file target left untouched');
+});
+
+test('install: refuses a non-file existing marker target before reading it', () => {
+  const sb = freshSandbox();
+  const skillDir = path.join(sb.claudeRoot, 'xsk-think');
+  const markerFile = path.join(skillDir, MARKER);
+  fs.mkdirSync(markerFile, { recursive: true });
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['claude'],
+        platformRoots: { claude: sb.claudeRoot },
+        xskRoot: sb.xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /non-file marker file/i,
+  );
+  assert.ok(fs.lstatSync(markerFile).isDirectory(), 'non-file marker target left untouched');
+});
+
 test('install: refuses a symlinked platform root before writing through it', () => {
   const sb = freshSandbox();
   const outside = path.join(sb.home, 'outside-root-target');
@@ -1047,6 +1085,39 @@ test('install: only the opencode adapter resolves a commands root (honoring the 
   assert.strictEqual(typeof gemini.commandsRoot, 'undefined', 'gemini has no commands root');
 });
 
+test('install: ignores command-root overrides for non-opencode platforms', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-command-roots-'));
+  const roots = {
+    claude: path.join(home, 'claude-skills'),
+    codex: path.join(home, 'agents-skills'),
+    gemini: path.join(home, 'gemini-skills'),
+  };
+  const commandRoots = {
+    claude: path.join(home, 'claude-commands'),
+    codex: path.join(home, 'codex-commands'),
+    gemini: path.join(home, 'gemini-commands'),
+  };
+  const xskRoot = path.join(home, '.xsk');
+
+  install({
+    platforms: ['claude', 'codex', 'gemini'],
+    platformRoots: roots,
+    platformCommandsRoots: commandRoots,
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+
+  for (const platform of ['claude', 'codex', 'gemini']) {
+    const commandFile = path.join(commandRoots[platform], 'xsk-think.md');
+    assert.ok(!fs.existsSync(commandFile), `${platform} command override ignored`);
+    const manifest = read(platform, { xskRoot });
+    assert.ok(
+      !manifest.installed_paths.some((p) => p.startsWith(commandRoots[platform] + path.sep)),
+      `${platform} manifest does not record command-root paths`,
+    );
+  }
+});
+
 test('install: opencode writes a commands/<name>.md command file recorded + hashed, additive to the skills dir', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
   const skillsRoot = path.join(home, 'opencode-skills');
@@ -1136,6 +1207,30 @@ test('install: opencode does not clobber a pre-existing user command file absent
   );
   assert.strictEqual(fs.readFileSync(commandFile, 'utf8'), 'user-authored command\n', 'user command file preserved');
   assert.ok(!fs.existsSync(path.join(skillsRoot, 'xsk-think', 'SKILL.md')), 'skill write rolled back on command refusal');
+  assert.strictEqual(read('opencode', { xskRoot }), null, 'no manifest written');
+});
+
+test('install: opencode refuses a non-file existing command target before reading it', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-opencode-'));
+  const skillsRoot = path.join(home, 'opencode-skills');
+  const commandsRoot = path.join(home, 'opencode-commands');
+  const xskRoot = path.join(home, '.xsk');
+  const commandFile = path.join(commandsRoot, 'xsk-think.md');
+  fs.mkdirSync(commandFile, { recursive: true });
+
+  assert.throws(
+    () =>
+      install({
+        platforms: ['opencode'],
+        platformRoots: { opencode: skillsRoot },
+        platformCommandsRoots: { opencode: commandsRoot },
+        xskRoot,
+        skills: [get('xsk-think')],
+      }),
+    /non-file command file/i,
+  );
+  assert.ok(fs.lstatSync(commandFile).isDirectory(), 'non-file command target left untouched');
+  assert.ok(!fs.existsSync(path.join(skillsRoot, 'xsk-think', 'SKILL.md')), 'skill write rolled back');
   assert.strictEqual(read('opencode', { xskRoot }), null, 'no manifest written');
 });
 

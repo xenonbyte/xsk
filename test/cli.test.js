@@ -136,6 +136,31 @@ test('cli: opencode install/uninstall output reports command-file counts', () =>
   assert.strictEqual(uninstallMatch[1], uninstallMatch[2], 'every installed command file removed');
 });
 
+test('cli: uninstall reports refused paths without labeling every case as symlink', () => {
+  const opts = fixtureOpts();
+  const skillDir = path.join(opts.platformRoots.claude, 'xsk-think');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  fs.mkdirSync(skillDir, { recursive: true });
+  fs.writeFileSync(skillFile, 'user-authored skill\n');
+
+  const sInstall = streams();
+  assert.strictEqual(
+    main(['install', '--platform', 'claude'], Object.assign({ stdout: sInstall.stdout, stderr: sInstall.stderr }, opts)),
+    0,
+    'claude install exits 0',
+  );
+  const backup = path.join(opts.xskRoot, 'install', 'backups', 'claude', 'xsk-think.SKILL.md.bak');
+  assert.ok(fs.existsSync(backup), 'displaced user skill backup was created');
+  fs.rmSync(backup);
+
+  const sUninstall = streams();
+  const code = main(['uninstall', '--platform', 'claude'], Object.assign({ stdout: sUninstall.stdout, stderr: sUninstall.stderr }, opts));
+  const out = sUninstall.getOut();
+  assert.strictEqual(code, 2, 'missing backup produces a partial uninstall');
+  assert.match(out, /refused 1 path\(s\)/);
+  assert.doesNotMatch(out, /symlink/);
+});
+
 test('cli: doctor runs and exits 0 on a healthy fixture', () => {
   const opts = fixtureOpts();
   const s = streams();

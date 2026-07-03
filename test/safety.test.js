@@ -268,7 +268,7 @@ test('safety: atomic-write rollback — a mid-run command file failure removes c
       xskRoot: sb.xskRoot,
       skills: [get('xsk-think'), get('xsk-write-req')],
     }),
-    /EISDIR|EEXIST|ENOTDIR|directory/,
+    /non-file command file|EISDIR|EEXIST|ENOTDIR|directory/i,
     'install throws when a command file path is occupied by a directory',
   );
   assert.ok(
