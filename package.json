@@ -1,6 +1,6 @@
 {
   "name": "@xenonbyte/xsk",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Agent skill aggregator. Install a curated set of agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed safety.",
   "license": "MIT",
   "bin": {
