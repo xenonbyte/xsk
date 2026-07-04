@@ -25,7 +25,11 @@ function validManifestObj(overrides) {
 test('status: statusOf ok when shape valid and all paths exist', () => {
   const m = validManifestObj();
   assert.strictEqual(
-    statusOf(m, { expectedPlatform: 'claude', exists: () => true }),
+    statusOf(m, {
+      expectedPlatform: 'claude',
+      exists: () => true,
+      readFile: () => '@xenonbyte/xsk\n',
+    }),
     'ok',
   );
 });
@@ -43,7 +47,11 @@ test('status: statusOf drift when a recorded backup is missing on disk', () => {
     backups: [{ target: '/tmp/a/SKILL.md', backup: '/tmp/xsk-backup.bak' }],
   });
   assert.strictEqual(
-    statusOf(m, { expectedPlatform: 'claude', exists: (p) => p !== '/tmp/xsk-backup.bak' }),
+    statusOf(m, {
+      expectedPlatform: 'claude',
+      exists: (p) => p !== '/tmp/xsk-backup.bak',
+      readFile: () => '@xenonbyte/xsk\n',
+    }),
     'drift',
   );
 });
@@ -182,6 +190,30 @@ test('status: computeStatus reports drift when a recorded marker becomes a direc
   const result = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
   assert.strictEqual(result.platforms.claude.state, 'drift');
   assert.ok(result.platforms.claude.missing.includes(markerFile));
+});
+
+test('status: computeStatus and doctor report drift when a recorded marker is edited', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-status-'));
+  const claudeRoot = path.join(home, 'claude-skills');
+  const xskRoot = path.join(home, '.xsk');
+  const markerFile = path.join(claudeRoot, 'xsk-think', '.xsk-owned');
+  install({
+    platforms: ['claude'],
+    platformRoots: { claude: claudeRoot },
+    xskRoot,
+    skills: [get('xsk-think')],
+  });
+  fs.writeFileSync(markerFile, 'tampered\n');
+
+  const status = computeStatus({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+  assert.strictEqual(status.platforms.claude.state, 'drift');
+  assert.ok(status.platforms.claude.missing.includes(markerFile));
+
+  const doctorResult = doctor({ platforms: ['claude'], platformRoots: { claude: claudeRoot }, xskRoot });
+  const manifest = doctorResult.checks.find((c) => c.name === 'manifest-valid');
+  assert.strictEqual(manifest.pass, false);
+  assert.match(manifest.detail, /drift/i);
+  assert.strictEqual(doctorResult.allPass, false);
 });
 
 test('status: computeStatus reports drift when a recorded owned dir becomes a file', () => {

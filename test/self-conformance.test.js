@@ -134,7 +134,17 @@ test('self-conformance: package.json carries the required fields', () => {
 });
 
 test('self-conformance: npm pack --dry-run includes sources and excludes dev/test paths', () => {
-  const raw = execSync('npm pack --dry-run --json', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+  const npmCache = fs.mkdtempSync(path.join(os.tmpdir(), 'xsk-npm-cache-'));
+  let raw;
+  try {
+    raw = execSync('npm pack --dry-run --json', {
+      cwd: ROOT,
+      env: { ...process.env, npm_config_cache: npmCache },
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString();
+  } finally {
+    fs.rmSync(npmCache, { recursive: true, force: true });
+  }
   const files = JSON.parse(raw)[0].files.map((f) => f.path);
 
   const required = [
