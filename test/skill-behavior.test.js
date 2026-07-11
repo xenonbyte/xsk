@@ -60,6 +60,8 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
   assert.ok(/Proposed Design Summary/.test(c), 'output is a Proposed Design Summary');
   assert.ok(!/Approved Design Summary/.test(c), 'output does not use Approved Design Summary');
   assert.ok(/stop/i.test(c) && /wait for approval/.test(c), 'stops and waits');
+  assert.ok(/xsk-execute-plan/.test(c), 'offers execute-plan handoff');
+  assert.ok(/never an automatic invocation/.test(c), 'offer never auto-runs');
 });
 
 test('skill-behavior: xsk-bypass-claude — settings.local.json only, Claude-only refusal, malformed-file refusal', () => {
@@ -279,6 +281,28 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
   assert.ok(
     /git add -- <those paths> && git commit -m "docs\(xsk\): drop point <slug>" -- <those paths>/.test(c),
     'stages the deletion then path-limits the drop commit');
+});
+
+test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispatch, unified two-tier acceptance', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(/explicitly invoked only/.test(c), 'explicit invocation only');
+  assert.ok(/never self-triggers/.test(c), 'no self-trigger on execution intent');
+  assert.ok(/simple to decide but heavy to execute/.test(c), 'fit criterion');
+  assert.ok(/cheaper done inline/.test(c), 'inline counter-example');
+  assert.ok(/ordered task list/.test(c) && /acceptance criteria before anything executes/.test(c), 'decompose then acceptance first');
+  assert.ok(/\.xsk\/runs\//.test(c), 'ledger path');
+  assert.ok(/never overwrite an existing `\.xsk\/\.gitignore`/.test(c), 'gitignore append-only discipline');
+  assert.ok(/self-contained prompt/.test(c), 'self-contained subagent dispatch');
+  assert.ok(/self-contained enough to re-dispatch/.test(c), 'ledger tasks re-dispatchable');
+  assert.ok(/file sets do not overlap/.test(c), 'parallel only when file sets disjoint');
+  assert.ok(/no review and no acceptance run/.test(c), 'no per-task review');
+  assert.ok(/only the unfinished tasks/.test(c) && /pending or failed/.test(c), 'resume semantics');
+  assert.ok(/functional acceptance not run/.test(c), 'zero-gate run labeled prominently');
+  assert.ok(/warning-level, never a gate/.test(c), 'UI acceptance warning-level');
+  assert.ok(/UI acceptance skipped/.test(c), 'unrenderable UI skips without failing');
+  assert.ok(/at most 2 rounds/.test(c), 'bounded UI fix rounds');
+  assert.ok(/never fails the run/.test(c), 'UI residual never fails the run');
+  assert.ok(/Do not commit, push/.test(c), 'stops without committing');
 });
 
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {
