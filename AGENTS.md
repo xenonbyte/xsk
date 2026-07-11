@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`xsk` (`@xenonbyte/xsk`) - zero-dependency Node >=20 CommonJS CLI that installs 8 curated agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed install/uninstall safety. `xsk` self-conforms to its own scaffold standard (`test/self-conformance.test.js` is the executable floor).
+`xsk` (`@xenonbyte/xsk`) - zero-dependency Node >=20 CommonJS CLI that installs 9 curated agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed install/uninstall safety. `xsk` self-conforms to its own scaffold standard (`test/self-conformance.test.js` is the executable floor).
 ## Commands
 - `npm test` - full `node --test` suite (auto-discovers `test/**/*.test.js`).
 - `node --test test/install.test.js` - one file; add `--test-name-pattern="phrase"` for one test.
@@ -10,7 +10,7 @@
 No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before claiming done.
 
 ## Skills
-8 skills registered in `lib/skills.js` (shape `{ name, description, platforms, fragmentBase }`; `ALL_PLATFORMS = ['claude','codex','opencode','gemini']`): `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-check`. `xsk-bypass-claude` is Claude-only (`platforms: ['claude']`); the other 7 target all 4 platforms.
+9 skills registered in `lib/skills.js` (shape `{ name, description, platforms, fragmentBase }`; `ALL_PLATFORMS = ['claude','codex','opencode','gemini']`): `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-check`, `xsk-execute-plan`. `xsk-bypass-claude` is Claude-only (`platforms: ['claude']`); the other 8 target all 4 platforms.
 
 ## Generation model - single source of truth
 `skills/<name>/SKILL.md` are GENERATED output. Do not hand-edit them; direct edits pass locally but fail `test/golden.test.js`.
@@ -34,7 +34,7 @@ No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before
 - English. Triggers are multilingual cues, not exact-match incantations.
 - No em-dash (U+2014) or en-dash (U+2013) - enforced for `xsk-write-req`, applied project-wide. Use ASCII hyphen, colon, or comma. No AI-formulaic filler (banned-phrase list pinned in `test/skill-behavior.test.js`).
 - Generated frontmatter is `name` + `description` only. Never add `when_to_use`/`dispatch_intent` as required fields (opencode ignores them - alias-collision rule).
-- `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point` describe reading/writing a project's `.xsk/` dir (`.xsk/requirements/`, `.xsk/points/`, `.xsk/.gitignore`). That is documented skill behavior living in the fragments, NOT runtime code in `lib/`; `lib/` never touches those paths.
+- `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan` describe reading/writing a project's `.xsk/` dir (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, `.xsk/.gitignore`). That is documented skill behavior living in the fragments, NOT runtime code in `lib/`; `lib/` never touches those paths.
 
 ## Install/safety model
 `bin/xsk.js` `main(argv, options)` dispatches to `lib/install.js` (`install`), `lib/uninstall.js`, `lib/status.js` (`computeStatus`), `lib/capability.js` (`doctor`). Manifest owned by `lib/manifest.js` (`installed_paths`, `backups`, optional `installed_hashes`; `validateOperationalSemantics` checks every recorded path stays under its platform's skills root, or the commands root for command files). Ownership predicates and `MARKER`/`PACKAGE_NAME` live in `lib/ownership.js`, kept separate so install and uninstall have no require cycle.
