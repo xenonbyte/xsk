@@ -1,1 +1,1 @@
-A per-task list of compact results; the acceptance report with each criterion's pass or fail, UI warnings if any, and whether functional acceptance ran; and the ledger path `.xsk/runs/<slug>.md` with its final `status` (`done` or `failed`).
+A per-task list of compact results; the acceptance report with each criterion's `pass`, `fail`, or `skipped` status (including a reason for `skipped`), UI warnings if any, and whether functional acceptance ran; and the ledger path `.xsk/runs/<slug>.md` with its final `status` (`done` or `failed`).

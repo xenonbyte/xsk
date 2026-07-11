@@ -302,6 +302,18 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   assert.ok(/UI acceptance skipped/.test(c), 'unrenderable UI skips without failing');
   assert.ok(/at most 2 rounds/.test(c), 'bounded UI fix rounds');
   assert.ok(/never fails the run/.test(c), 'UI residual never fails the run');
+  assert.ok(/After the last UI fix round that changed files, rerun/.test(c), 'UI fixes trigger final functional revalidation');
+  assert.ok(/discard any earlier functional result/.test(c), 'stale functional result cannot determine final status');
+  assert.ok(/The final `done` or `failed` comes from the latest functional acceptance/.test(c), 'latest functional result determines final status');
+  assert.ok(
+    c.includes("Fill `## Result`: each task's compact outcome, each acceptance criterion's `pass`, `fail`, or `skipped` status (with the reason when skipped)"),
+    'behavior contract represents skipped checks with reasons',
+  );
+  assert.ok(
+    c.includes("the acceptance report with each criterion's `pass`, `fail`, or `skipped` status (including a reason for `skipped`)"),
+    'output contract represents skipped checks with reasons',
+  );
+  assert.ok(/`skipped` is non-failing but must never look like `pass`/.test(c), 'skipped remains honest and non-failing');
   assert.ok(/Do not commit, push/.test(c), 'stops without committing');
 });
 
