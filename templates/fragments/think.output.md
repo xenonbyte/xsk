@@ -7,3 +7,5 @@ A **Proposed Design Summary** with these parts:
 - **Open Questions**, if any, that only the user can resolve.
 
 Then stop and wait for approval. Do not begin implementation.
+
+If the plan is executable (not a pure judgment) and no Open Questions remain, offer to run it with `xsk-execute-plan`. Offer only; never invoke it automatically.

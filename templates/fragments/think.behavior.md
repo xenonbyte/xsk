@@ -12,4 +12,4 @@
 
 **5. No placeholders in an approved plan.** A plan is not done until every decision is concrete. No "TBD", no "figure out later", no "we'll decide". If a decision is genuinely open, it goes into Open Questions for the user to resolve, not into the plan body.
 
-**6. Stop at the design.** Output the plan, surface blocking ambiguities as one-sentence questions, then stop. Implementation starts only on explicit approval.
+**6. Stop at the design.** Output the plan, surface blocking ambiguities as one-sentence questions, then stop. Implementation starts only on explicit approval. When the design is an executable plan with concrete steps (not a pure judgment such as "not worth doing" or "keep things as they are") and every Open Question is resolved, offer `xsk-execute-plan` as the executor; the offer is a proposal, never an automatic invocation. Otherwise do not offer it.
