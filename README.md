@@ -12,13 +12,13 @@
 
 ## Overview
 
-Working across AI coding agents has two recurring frictions: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships eight curated skills (two distilled from third parties, six original) and a CLI that installs each skill into every supported platform's skill directory, then records exactly what it created so uninstall removes only those files.
+Working across AI coding agents has two recurring frictions: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships nine curated skills (two distilled from third parties, seven original) and a CLI that installs each skill into every supported platform's skill directory, then records exactly what it created so uninstall removes only those files.
 
 `xsk` is itself an agent-skill project and conforms to the same standard its scaffold skill enforces.
 
 ## Features
 
-- **Eight curated skills**, not an all-or-nothing pack: install everything, or pick per platform.
+- **Nine curated skills**, not an all-or-nothing pack: install everything, or pick per platform.
 - **Four platforms, one shape.** Claude Code, Codex, opencode, and Gemini share a `<name>/SKILL.md` layout; opencode additionally gets directly invocable `/xsk-<name>` commands.
 - **Manifest-backed safety.** Owned-only removal, ownership markers, atomic writes, symlink refusal, and content-hash drift detection.
 - **Uninstall-first installs.** A reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed.
@@ -62,7 +62,7 @@ Unknown options fail loud with a non-zero exit.
 
 ## Skills
 
-Eight skills, prefixed `xsk-`:
+Nine skills, prefixed `xsk-`:
 
 | Skill | Purpose |
 |---|---|
@@ -74,6 +74,7 @@ Eight skills, prefixed `xsk-`:
 | `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
 | `xsk-point` | Research one aspect of the current project to a decision-complete landed plan and persist it as a point document in `.xsk/points/`. |
 | `xsk-consume-point` | Fold selected `.xsk/points/` documents into one `.xsk/requirements/` doc via `xsk-write-req`, archiving consumed points write-before-remove. |
+| `xsk-execute-plan` | Execute a small plan or request as subagent-isolated tasks tracked in a `.xsk/runs/` ledger, with one confirmation gate and unified acceptance at the end. Explicit invocation only. |
 
 > [!NOTE]
 > `xsk-bypass-claude` targets Claude Code only; `xsk install` skips it on the other three platforms.

@@ -12,13 +12,13 @@
 
 ## Overview
 
-跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处、缺少统一的安装 / manifest / 安全方案。`xsk` 同时解决这两点。它内置八个精选 skill（两个从第三方蒸馏而来，六个原创），并提供一个 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，再精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
+跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处、缺少统一的安装 / manifest / 安全方案。`xsk` 同时解决这两点。它内置九个精选 skill（两个从第三方蒸馏而来，七个原创），并提供一个 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，再精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
 ## Features
 
-- **八个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
+- **九个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
 - **四个平台，同一形态。** Claude Code、Codex、opencode 与 Gemini 共用 `<name>/SKILL.md` 布局；opencode 还额外获得可直接调用的 `/xsk-<name>` 命令。
 - **manifest 为后盾的安全。** owned-only removal、ownership markers、atomic writes、symlink refusal，以及 content-hash 漂移检测。
 - **uninstall-first 安装。** 重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`。
@@ -62,7 +62,7 @@ xsk help
 
 ## Skills
 
-共八个 skill，统一前缀 `xsk-`：
+共九个 skill，统一前缀 `xsk-`：
 
 | Skill | Purpose |
 |---|---|
@@ -74,6 +74,7 @@ xsk help
 | `xsk-check` | 在改动合入前评审：范围漂移、hard stops、证据门控的发现项，再验证后签收。蒸馏自 Waza `/check`。 |
 | `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
 | `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
+| `xsk-execute-plan` | 把一个小型 plan 或需求拆解成 subagent-isolated 的任务，记录进 `.xsk/runs/` ledger；只设一个确认门，全部完成后统一验收。仅限显式调用。 |
 
 > [!NOTE]
 > `xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。

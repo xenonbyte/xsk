@@ -68,4 +68,4 @@ Safety invariants that span these files:
 
 ## Skill runtime stores
 
-Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
+Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
