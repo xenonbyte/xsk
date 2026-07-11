@@ -42,13 +42,13 @@ created_at: 2026-07-11
 
 ### R1 注册表条目
 
-`lib/skills.js` 追加（description 已定稿，全 ASCII）：
+`lib/skills.js` 追加（description 已定稿，全 ASCII；2026-07-11 经用户确认将原文案的 "ledger: one" 改为 "ledger, with one"，因未加引号的 YAML frontmatter 值内不允许冒号+空格）：
 
 ```js
 {
   name: 'xsk-execute-plan',
   description:
-    'Execute a small plan or request as subagent-isolated tasks tracked in a .xsk/runs/ ledger: one confirmation gate, no per-task review, unified acceptance at the end. Explicit invocation only.',
+    'Execute a small plan or request as subagent-isolated tasks tracked in a .xsk/runs/ ledger, with one confirmation gate, no per-task review, and unified acceptance at the end. Explicit invocation only.',
   platforms: ALL_PLATFORMS.slice(),
   fragmentBase: 'execute-plan',
 }
