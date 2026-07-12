@@ -42,7 +42,16 @@ fs.writeFileSync(`skills/${s.fragmentBase}/SKILL.md`, content);
 fs.writeFileSync(`test/fixtures/golden/${s.name}.md`, content.replace(sharedTrim, '<SHARED_MASKED>'));
 ```
 
-Adding a new skill = new registry entry + four new fragments + regenerate + extend the hardcoded skill enumerations in `test/generator.test.js`, `test/self-conformance.test.js`, and `test/skill-behavior.test.js`, plus a README row in both READMEs.
+Adding a new skill = new `lib/skills.js` registry entry + four new fragments + regenerate the packed skill AND its golden, then sync every place that hardcodes the skill set:
+- `test/generator.test.js`: the skill-count in the test title + the sorted names list.
+- `test/install.test.js`: the per-platform count assertions and the test title (claude gets all N; the non-claude platforms get N-1 because `xsk-bypass-claude` is claude-only).
+- `test/self-conformance.test.js`: the required packed-file list (`skills/<base>/SKILL.md`).
+- `test/skill-behavior.test.js`: a per-skill behavior assertion block.
+- Both READMEs: a table row AND the body count phrases (the `nine`/`seven` style counts, three per README).
+- `AGENTS.md`: the header install count and the `## Skills` list/count (this is the twin of this file for non-Claude agents).
+- The `Skill runtime stores` section below (and its `AGENTS.md` counterpart) when the skill reads/writes `.xsk/`.
+
+`npm test` is the backstop for the test-file and README-parity edits, but the README and `AGENTS.md` counts have no test guard: verify those by eye.
 
 ## Install / safety model
 
@@ -69,3 +78,7 @@ Safety invariants that span these files:
 ## Skill runtime stores
 
 Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
+
+## Not part of xsk (do not confuse for source)
+
+`.req-to-plan/` is the r2p (req-to-plan) workflow tool and `.drfx/` is a separate review/fix tool. Neither is xsk source, neither ships in the package (both excluded by the `files` field), and `.xsk/` here is this repo's own use of the skills' runtime store, not `lib/` code. `.drfx/` is gitignored; `.req-to-plan/` tracks only its own `.gitignore`.

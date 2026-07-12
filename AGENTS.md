@@ -28,7 +28,7 @@ No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before
   fs.writeFileSync(`skills/${s.fragmentBase}/SKILL.md`, content);
   fs.writeFileSync(`test/fixtures/golden/${s.name}.md`, content.replace(sharedTrim, '<SHARED_MASKED>'));
   ```
-- Adding a new skill = new registry entry + four new fragments + regenerate + extend the hardcoded skill enumerations in `test/generator.test.js`, `test/self-conformance.test.js`, and `test/skill-behavior.test.js`, plus a README row in both READMEs.
+- Adding a new skill = new registry entry + four new fragments + regenerate packed + golden, then sync every site that hardcodes the skill set: `test/generator.test.js` (count in title + sorted names list), `test/install.test.js` (per-platform count assertions + title; claude=N, non-claude platforms=N-1 since `xsk-bypass-claude` is claude-only), `test/self-conformance.test.js` (packed-file list), `test/skill-behavior.test.js` (per-skill block); a table row + the body count phrases in both READMEs; this file's header count and `## Skills` list; CLAUDE.md's `Skill runtime stores` section and the `.xsk/` line under `Skill content rules` below when the skill touches `.xsk/`. `npm test` guards the test-file + README-parity edits; the README and this file's counts have NO test - eyeball them.
 
 ## Skill content rules
 - English. Triggers are multilingual cues, not exact-match incantations.
