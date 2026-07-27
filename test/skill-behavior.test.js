@@ -603,11 +603,19 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'the ledger tracks dispatch, reconciliation, terminal states, and an attempt number',
   );
   assert.ok(
-    /The ledger is write-ahead:[\s\S]*?same anchored write that sets a task's line to `in-flight` with its attempt number,[\s\S]*?record path-state fingerprints for its complete footprint, the current Git changed-path inventory, and the current ignored-state checkpoint, then dispatch it/.test(c),
+    /in one anchored write, record the writer's identity and attempt number, path-state fingerprints for its complete footprint, the current Git changed-path inventory, and the current ignored-state checkpoint; for a task that is the same write which sets its ledger line to `in-flight`\. Dispatch or run it only after that write lands/.test(c),
     'task state and attempt-start evidence are persisted before dispatch',
   );
   assert.ok(
-    /Recording only a terminal state after a task finishes would let an interruption between return and reconciliation leave unresolved work looking complete/.test(c),
+    /\*\*The writer protocol\.\*\*[\s\S]*?every task subagent, every project verification command, every functional or UI fix round, and the fresh verifier/.test(c),
+    'one protocol governs every writer the run puts in front of the workspace',
+  );
+  assert.ok(
+    /Later steps invoke this protocol by name instead of restating it, and a writer that cannot complete every phase does not run/.test(c),
+    'later steps reference the protocol rather than restating it',
+  );
+  assert.ok(
+    /Recording only a terminal state after a writer finishes would let an interruption between return and reconciliation leave unresolved work looking complete/.test(c),
     'the write-ahead rule names the premature-completion hazard it closes',
   );
   assert.ok(
@@ -623,7 +631,7 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'resume completes returned-task reconciliation before dispatch or acceptance',
   );
   assert.ok(
-    /first post-return checkpoint changes only `in-flight` to `reconciling`[\s\S]*?reported outcome and compact result, current Git changed-path inventory, current covered ignored scan, and observable fingerprints/.test(c),
+    /persist one durable nonterminal checkpoint holding the reported outcome and compact result, the current Git changed-path inventory, the current covered ignored scan, and observable fingerprints for the complete footprint\. For a task this changes only `in-flight` to `reconciling`/.test(c),
     'the first returned-task checkpoint is durable but nonterminal',
   );
   assert.ok(
@@ -748,7 +756,7 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'acceptance binds the immutable base, final HEAD, coverage, and canonical path state',
   );
   assert.ok(
-    /persist an anchored acceptance-command checkpoint[\s\S]*?In the same next anchored ledger write, record the command's exit result and compact output evidence, actual touched paths, terminal fingerprints, and overlap result/.test(c),
+    /verification commands \(tests, lint, build\) under the writer protocol[\s\S]*?each command's exit result and compact output evidence join its checkpoints/.test(c),
     'project commands also use durable before-and-after checkpoints',
   );
   assert.ok(
@@ -780,7 +788,7 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'diverged evidence cannot drive execution or reusable proof',
   );
   assert.ok(
-    /Ledger and companion paths may be excluded from the implementation diff only after this independent anchor check passes/.test(c),
+    /this run's anchored artifacts may be left out of the implementation diff, the acceptance path set, and the workspace fingerprint only once the anchor matches/.test(c),
     'run artifacts are excluded only when independently protected',
   );
 });
@@ -845,7 +853,11 @@ test('skill-behavior: xsk-execute-plan: result reuse is bound to reproducible id
     'workspace revalidation compares both path membership and path state',
   );
   assert.ok(
-    /Exclude Git metadata and run artifacts only after the protected anchor matches, but include `\.xsk\/\.gitignore` when changed/.test(c),
+    /The artifact-exclusion rule follows from that check: Git metadata and this run's anchored artifacts may be left out of the implementation diff, the acceptance path set, and the workspace fingerprint only once the anchor matches, and `\.xsk\/\.gitignore` is always included when this run changed it/.test(c),
+    'one artifact-exclusion rule covers the diff, the path set, and the fingerprint',
+  );
+  assert.ok(
+    /Apply the artifact-exclusion rule to that path set/.test(c),
     'the acceptance fingerprint excludes independently anchored artifacts without hiding the gitignore change',
   );
 });
@@ -868,19 +880,19 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'records actual paths and compares them with confirmed allowed paths',
   );
   assert.ok(
-    /independently derive every detectable actual touched path from the immutable original base, reconciled commit-range receipts, attempt-start records, current Git state, ignored-state comparison, and the subagent report,[\s\S]*?reconcile these sources rather than trusting the report alone/.test(c),
-    'the main workflow independently checks the subagent touched-path report',
+    /Independently derive every detectable actual touched path from the immutable original base, reconciled commit-range receipts, attempt-start records, current Git state, ignored-state comparison, and the writer's own report,[\s\S]*?reconcile these sources rather than trusting the report alone/.test(c),
+    'the main workflow independently checks the writer touched-path report',
   );
   assert.ok(
-    /Before every dispatch, compare the complete footprint with its latest trusted pre-run baseline or terminal task checkpoint[\s\S]*?Any mismatch since that checkpoint is new user work or ambiguity/.test(c),
+    /before the writer runs[\s\S]*?Compare its complete footprint with the latest trusted pre-run baseline or terminal checkpoint[\s\S]*?Any mismatch since that checkpoint is new user work or ambiguity/.test(c),
     'new user edits between tasks are protected before the next dispatch',
   );
   assert.ok(
-    /A task's write footprint is its expected write paths together with its tolerated side-effect paths/.test(c),
+    /A writer's footprint is its expected write paths together with its tolerated side-effect paths/.test(c),
     'the parallel-safety footprint unions expected and tolerated paths',
   );
   assert.ok(
-    /a shared lockfile or regenerated index counts even when the two tasks own different source files/.test(c),
+    /a shared lockfile or regenerated index counts even when two writers own different source files/.test(c),
     'shared side-effect targets block parallel dispatch',
   );
   assert.ok(/Never revert an unexpected path automatically/.test(c), 'unexpected paths are never auto-reverted');
@@ -929,15 +941,15 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'a root that cannot be read is explicit incomplete evidence',
   );
   assert.ok(
-    /rescan every covered ignored root[\s\S]*?repository-wide coverage also repeats the whole-namespace enumeration[\s\S]*?changed existing ignored descendant or a newly created ignored path under those roots[\s\S]*?even when the subagent omitted it/.test(c),
+    /Rescan every covered ignored root[\s\S]*?repository-wide coverage also repeats the whole-namespace enumeration[\s\S]*?changed existing ignored descendant or a newly created ignored path under those roots[\s\S]*?even when the writer omitted it/.test(c),
     'ignored writes omitted from a task report are independently detected within scope',
   );
   assert.ok(
-    /If a covered root becomes unreadable, downgrade the scope to incomplete, record the uncovered namespace and resulting ambiguity, mark every acceptance criterion that depended on it `skipped` with that reason, and report it prominently/.test(c),
+    /If a covered root has become unreadable, downgrade the scope to incomplete and apply the coverage rules from step 3, marking every acceptance criterion that depended on it `skipped` with that reason and reporting it prominently/.test(c),
     'a root lost mid-run downgrades the scope and skips the criteria that relied on it',
   );
   assert.ok(
-    /Incomplete coverage never passes as verified and requires `Acceptance fingerprint: not produced`, so the run cannot be reused/.test(c),
+    /Incomplete coverage is the failing scope: it permits execution and ordinary checks, but it disables verified acceptance, acceptance-fingerprint production, and reuse/.test(c),
     'incomplete coverage cannot mint verified or reusable proof',
   );
   assert.ok(
@@ -986,7 +998,7 @@ test('skill-behavior: xsk-execute-plan: one normal gate preserves exceptional au
 test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional acceptance', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
   const commandIndex = c.indexOf("First run the project's own verification commands");
-  const verifierIndex = c.indexOf('Only after the project commands and all of their writes have been reconciled, dispatch a fresh verifier');
+  const verifierIndex = c.indexOf('Only once every command has reached its terminal write, dispatch a fresh verifier');
   assert.ok(
     commandIndex >= 0 && verifierIndex >= 0 && commandIndex < verifierIndex,
     'project commands and their writes are reconciled before the fresh verifier',
@@ -996,9 +1008,18 @@ test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional a
     'verification-command writes are declared in the confirmed envelope',
   );
   assert.ok(
-    /Immediately before each command, persist an anchored acceptance-command checkpoint[\s\S]*?After each command returns and the protected artifact anchor still matches, derive and fingerprint every detectable write[\s\S]*?Reconcile those writes through the same allowed-path, scope-drift, dirty-overlap preservation, and ignored-coverage rules as a task/.test(c),
+    /run the project's own verification commands \(tests, lint, build\) under the writer protocol, each with the write footprint the envelope declares for it/.test(c),
+    'verification commands run under the same protocol as tasks',
+  );
+  assert.ok(
+    /Its phases already cover the before-and-after checkpoints, the derivation of every detectable write including ignored, generated, snapshot, formatter, staged, committed, deleted, and type-changed output, and the allowed-path, scope-drift, dirty-overlap preservation, and coverage rules/.test(c),
     'command-induced writes receive durable checkpoints and full scope checks',
   );
+  assert.ok(
+    /add only that a forward `HEAD` interval is reconciled before command output is attributed, and that each command's exit result and compact output evidence join its checkpoints/.test(c),
+    'the command site adds only what the protocol does not already cover',
+  );
+  assert.ok(/A command failure does not excuse any of it/.test(c), 'a failing command is still reconciled');
   assert.ok(
     /confirmed goal, acceptance criteria, execution envelope, immutable original base commit, final reconciled `HEAD`, complete reconciled commit-range receipts,[\s\S]*?terminal task-output and acceptance-command fingerprints, actual touched paths, command output evidence, and the post-command actual diff derived against the immutable original base commit/.test(c),
     'verifier receives the immutable base, reconciled history, checkpoints, and post-command diff',
@@ -1012,11 +1033,11 @@ test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional a
     'fresh verification cannot infer overlap preservation',
   );
   assert.ok(
-    /Footprint coverage verifies scope within its covered roots and must be reported with that bound stated; only repository-wide coverage supports an unbounded ignored-scope claim/.test(c),
+    /Report the ignored-scope bound this run actually had, on the terms step 3 sets: footprint coverage verifies within its covered roots and must be reported with that bound stated/.test(c),
     'acceptance states the bound of the coverage scope it actually had',
   );
   assert.ok(
-    /Incomplete coverage is not a failure by itself: it marks every criterion that depended on the lost roots `skipped`, forces `Acceptance fingerprint: not produced`, disables reuse, and can never be reported as verified/.test(c),
+    /incomplete coverage marks every criterion that depended on the lost roots `skipped` without failing the run on its own/.test(c),
     'only genuinely lost coverage degrades to skipped and blocks reusable proof',
   );
   assert.ok(
@@ -1028,17 +1049,17 @@ test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional a
     'functional fixes are bounded and fully reverified',
   );
   assert.ok(
-    /Dispatch that fix as its own write-ahead ledger task under the full step 5 contract: allowed paths, the drift comparison, overlap preservation, terminal output fingerprints, and the same scoped-authority contract, copying only an exact granted exception assigned to that fix task and prohibiting everything else/.test(c),
+    /That fix is a writer like any other: it joins the effective ordered task list and runs the full protocol under its own allowed paths and its own scoped authority/.test(c),
     'the functional fix attempt inherits the full task contract and is tracked in the ledger',
   );
   assert.ok(
-    /Between tasks there is no code review and no acceptance run[\s\S]*?produced by tools rather than by reading file contents, and it judges nothing about the implementation until unified acceptance/.test(c),
+    /Between writers there is no code review and no acceptance run[\s\S]*?produced by tools rather than by reading file contents, and it judges nothing about the implementation until unified acceptance/.test(c),
     'per-task bookkeeping is tool-produced evidence, not a review',
   );
   assert.ok(/warning-level, never a gate/.test(c), 'UI fidelity remains advisory');
   assert.ok(/at most 2 rounds by default/.test(c), 'UI fixes remain bounded');
   assert.ok(
-    /Every UI fix round is dispatched as its own write-ahead ledger task under the full step 5 contract too: allowed paths, the drift comparison, and the same scoped-authority contract, copying only an exact granted exception assigned to that UI fix task and prohibiting everything else/.test(c),
+    /Every UI fix round is a writer too: it joins the effective ordered task list and runs the full protocol under its own allowed paths and its own scoped authority/.test(c),
     'UI fix rounds inherit the same contract instead of only the file-set rule',
   );
   assert.ok(
