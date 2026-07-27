@@ -364,8 +364,24 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
 // bytes of forensic protocol, which is worse than useless in a skill whose job
 // is to be cheap to load. Raising a cap is the same kind of decision, not a
 // convenience, and belongs in a commit that says which guarantee it buys.
-const EXECUTE_PLAN_PACKED_MAX = 12000;
-const EXECUTE_PLAN_BEHAVIOR_MAX = 8500;
+//
+// Raised twice, both times to buy fixes for defects a review found in an earlier
+// orchestrator draft, never for comfort.
+//
+// 12000/8500 to 12500/9500: a clean-worktree requirement replacing the
+// non-overlap rule that let a task silently overwrite a pending user edit, a
+// pre-dispatch check closing the gate-to-first-task window, closed transitions
+// for task failure and mid-run hard stops, and review material that includes
+// untracked paths a plain diff omits.
+//
+// 12500/9500 to 13500/10500: the clean-worktree rule above had made recovery
+// unreachable and aborted every run after its first task, since a running task
+// necessarily dirties the worktree. Admission now runs only for a fresh run, an
+// existing ledger routes straight to recovery, the mid-run rule covers only the
+// forbidden actions, a failed task ends the run, and every ledger state has one
+// recovery route.
+const EXECUTE_PLAN_PACKED_MAX = 13500;
+const EXECUTE_PLAN_BEHAVIOR_MAX = 10500;
 
 test('skill-behavior: xsk-execute-plan: invocation and eligibility', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
@@ -382,20 +398,25 @@ test('skill-behavior: xsk-execute-plan: invocation and eligibility', () => {
     /`git rev-parse --is-inside-work-tree` and `git rev-parse --verify HEAD` both succeed[\s\S]*?never invent a base commit/.test(c),
     'a committed Git baseline is required and never invented',
   );
-  assert.ok(/`git diff --cached --quiet` succeeds, so nothing is staged/.test(c), 'a staged index is refused');
   assert.ok(
-    /`git status --porcelain=v1 --untracked-files=all` is empty, or lists only paths outside the run-wide allowed paths[\s\S]*?Overlap is a hard stop/.test(c),
-    'pending changes are allowed only where they do not overlap the run',
+    /`git diff --cached --quiet` succeeds, so nothing is staged/.test(c) &&
+      /`git status --porcelain=v1 --untracked-files=all` is empty\./.test(c) &&
+      /With no content baseline this skill could never show that a pending edit survived, so a task could overwrite one and still pass every check/.test(c),
+    'a fresh run needs a clean tree and unstaged index, and says which overwrite that prevents',
   );
   assert.ok(
-    /this skill does not try to prove that a pre-existing edit survived a task that legitimately rewrote the same file/.test(c),
-    'the overlap stop states the proof it declines to attempt',
+    /If `\.xsk\/runs\/<slug>\.md` already exists, go straight to step 6: recovery has its own entry conditions/.test(c),
+    'an existing ledger routes to recovery before the clean-tree admission can refuse it',
   );
   assert.ok(
-    /Refuse with the remedy, not a bare stop: commit or stash the overlapping change, narrow the run's paths, run it directly, or move to a fuller workflow/.test(c),
-    'refusal names the way forward',
+    /The clean-worktree and unstaged-index conditions are admission only[\s\S]*?treating that as a broken precondition would abort every run after its first task/.test(c),
+    'admission conditions are not re-applied mid-run against the run own writes',
   );
-  assert.ok(/Never silently degrade into inline execution/.test(c), 'no silent fallback to inline execution');
+  assert.ok(
+    /Refuse with the remedy, not a bare stop: commit or stash the pending changes, run it directly, or move to a fuller workflow/.test(c) &&
+      /Never silently degrade into inline execution/.test(c),
+    'refusal names the way forward and never degrades to inline execution',
+  );
 });
 
 test('skill-behavior: xsk-execute-plan: safety boundary, gate, and ledger', () => {
@@ -409,17 +430,18 @@ test('skill-behavior: xsk-execute-plan: safety boundary, gate, and ledger', () =
     'ignored paths cannot hold deliverables or protected data',
   );
   assert.ok(
-    /If one of these conditions breaks mid-run, stop before it and get focused authorization; the gate never covers it/.test(c),
-    'the single gate never authorizes an exceptional action',
+    /The last two conditions hold all run: if a forbidden action or an ignored-path deliverable turns up once tasks are under way, set the run to `interrupted` and hand back, since this run never authorizes them/.test(c),
+    'a forbidden action found mid-run ends the run instead of being authorized',
   );
   assert.ok(
     /Ask at the same time for the one condition no command can check: that nobody, the user included, writes to this worktree while the run proceeds\. Record it as a declaration and never report it as verified/.test(c),
     'exclusivity is a user declaration, never reported as verified',
   );
-  assert.ok(/Exclusive worktree: declared by user, not verified/.test(c), 'the ledger records exclusivity as declared');
   assert.ok(
-    /status: running \| done \| failed \| interrupted/.test(c) && /\[pending\|in-flight\|done\|failed\]/.test(c),
-    'run and task state sets are fixed',
+    /Exclusive worktree: declared by user, not verified/.test(c) &&
+      /status: running \| done \| failed \| interrupted/.test(c) &&
+      /\[pending\|in-flight\|done\|failed\]/.test(c),
+    'the ledger fixes both state sets and records exclusivity as declared',
   );
   assert.ok(
     /The ledger is a recovery log, not tamper-evident evidence and not a deliverable: never offer to commit it/.test(c),
@@ -434,15 +456,22 @@ test('skill-behavior: xsk-execute-plan: safety boundary, gate, and ledger', () =
 test('skill-behavior: xsk-execute-plan: orchestration, acceptance, recovery, and reporting', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
   assert.ok(
-    /isolated from the main conversation's context, not from one another's filesystem, so run one task at a time in dependency order/.test(c),
-    'serial execution follows from shared-filesystem isolation',
+    /isolated from the main conversation's context, not from one another's filesystem, so run one task at a time in dependency order/.test(c) &&
+      /Per task, check twice: before writing `in-flight`, and again when the subagent returns\. Both times confirm that `HEAD` still equals `base`, that nothing is staged, and that the changed paths stay inside the allowed and orchestration-owned sets/.test(c) &&
+      /The pre-dispatch check matters most before the first task, since the gate may have been confirmed long before it/.test(c),
+    'tasks run serially, bracketed by the same three checks, with the gate-to-first-dispatch window named',
   );
   assert.ok(
-    /re-check that `HEAD` still equals `base`, that nothing is staged, and that the changed-path set is still inside the allowed plus pre-existing paths/.test(c),
-    'each task is bracketed by the same three checks',
+    /A task that ends `failed` sets `status: failed` and blocks its dependents: leave those `pending`, go to step 7, and report which were blocked\. That ledger is then history, so redoing the work means a fresh run/.test(c),
+    'a failed task ends the run and blocks its dependents',
   );
   assert.ok(
-    /Record two separately sourced facts, never merged into one claim: the paths the subagent reported, and the Git-visible changes now observable/.test(c),
+    /declare it as an orchestration-owned path, since a path this skill writes without confirming would later read as scope drift against itself/.test(c) &&
+      /wrote nothing outside the allowed and orchestration-owned paths/.test(c),
+    'the skill declares its own gitignore write and honors it through acceptance',
+  );
+  assert.ok(
+    /record two separately sourced facts, never merged into one claim: the paths the subagent reported, and the Git-visible changes now observable/.test(c),
     'reported paths and observed changes stay separate facts',
   );
   assert.ok(
@@ -451,49 +480,54 @@ test('skill-behavior: xsk-execute-plan: orchestration, acceptance, recovery, and
   );
   assert.ok(/Between tasks there is no code review and no acceptance run/.test(c), 'no per-task review');
   assert.ok(
-    /fresh reviewer that implemented no task and modifies no files/.test(c),
-    'acceptance uses an independent, non-writing reviewer',
+    /fresh reviewer that implemented no task and modifies no files/.test(c) &&
+      /tell it to read the untracked paths directly, since a plain diff omits them and a whole new source file would otherwise never reach review; deletions and type changes are already in that diff/.test(c),
+    'an independent non-writing reviewer sees the paths a plain diff hides',
   );
   assert.ok(
-    /Allow at most one bounded fix as an ordinary serial task, then rerun the commands and the reviewer once; never loop/.test(c),
-    'fixes are bounded and fully revalidated',
-  );
-  assert.ok(
-    /functional acceptance not run[\s\S]*?must never look like `pass`[\s\S]*?zero gates must never look verified/.test(c),
-    'a run with no gates never looks verified',
+    /Allow at most one bounded fix as an ordinary serial task, then rerun the commands and the reviewer once; never loop/.test(c) &&
+      /functional acceptance not run[\s\S]*?must never look like `pass`[\s\S]*?zero gates must never look verified/.test(c),
+    'fixes are bounded and revalidated, and a run with no gates never looks verified',
   );
   assert.ok(
     /warning-level, never a gate/.test(c) && /at most 2 rounds by default/.test(c),
     'UI fidelity stays advisory and bounded',
   );
   assert.ok(
-    /Never re-dispatch it and never infer what it did: set the run to `interrupted` and stop/.test(c),
-    'an in-flight task is never re-dispatched or attributed',
+    /Route on status first\. A `done` or `failed` ledger is history[\s\S]*?Only a `running` ledger, left by a session that ended mid-run, is resumable/.test(c),
+    'every ledger state has exactly one recovery route',
   );
   assert.ok(
-    /From `interrupted` the only routes are[\s\S]*?starting a fresh run that overwrites the ledger after confirmation, or retiring the ledger outright/.test(c),
-    'interrupted has defined exits',
+    /Never re-dispatch it and never infer what it did: set the run to `interrupted` and stop/.test(c) &&
+      /From `interrupted` the only routes are[\s\S]*?starting a fresh run that overwrites the ledger after confirmation, or retiring the ledger outright/.test(c),
+    'an in-flight task is never re-dispatched, and interrupted has defined exits',
   );
   assert.ok(
-    /a matching slug is not proof of a matching request/.test(c),
-    'resume confirms the work, not just the slug',
+    /a matching slug is not proof of a matching request/.test(c) &&
+      /always re-run full acceptance/.test(c) &&
+      /never skip execution or acceptance on its word/.test(c),
+    'resume confirms the work itself and never inherits an earlier verdict',
   );
   assert.ok(
-    /always re-run full acceptance/.test(c) && /never authorizes skipping execution or acceptance/.test(c),
-    'no resumed or prior run skips acceptance',
+    /dispatch only the pending tasks whose dependencies are all `done`, leaving anything downstream of a `failed` task blocked/.test(c),
+    'recovery does not run work that depends on a failed task',
   );
   assert.ok(
-    c.includes('"Ignored paths were not scanned: side effects there are outside this report."'),
-    'the report carries a fixed line naming what was not checked',
+    c.includes('"Ignored paths were not scanned: side effects there are outside this report."') &&
+      /Do not commit, push, or publish unless the user asks/.test(c),
+    'the report names what was not checked, and the run stops without committing',
   );
-  assert.ok(/Do not commit, push, or publish unless the user asks/.test(c), 'stops without committing');
 });
 
 test('skill-behavior: xsk-execute-plan: stays inside its byte budget', () => {
-  const packed = buildSkill(skills.find((s) => s.name === 'xsk-execute-plan')).content.length;
+  // Measured in UTF-8 bytes, matching the units the budget is written in.
+  // String.length would count UTF-16 code units instead.
+  const packed = Buffer.byteLength(
+    buildSkill(skills.find((s) => s.name === 'xsk-execute-plan')).content,
+    'utf8',
+  );
   const behavior = readFileSync(
     join(__dirname, '..', 'templates', 'fragments', 'execute-plan.behavior.md'),
-    'utf8',
   ).length;
   assert.ok(
     packed <= EXECUTE_PLAN_PACKED_MAX,
@@ -518,6 +552,7 @@ test('skill-behavior: xsk-execute-plan: retired forensic mechanisms do not retur
     'xsk-execute-plan-input-v1',
     'acceptance fingerprint',
     'prior-run carryover',
+    'reconciled HEAD',
   ]) {
     assert.ok(!c.includes(mechanism), `retired mechanism "${mechanism}" is absent`);
   }

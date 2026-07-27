@@ -74,7 +74,7 @@ Nine skills, prefixed `xsk-`:
 | `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
 | `xsk-point` | Research one aspect of the current project to a decision-complete landed plan and persist it as a point document in `.xsk/points/`. |
 | `xsk-consume-point` | Fold selected `.xsk/points/` documents into one `.xsk/requirements/` doc via `xsk-write-req`, archiving consumed points write-before-remove. |
-| `xsk-execute-plan` | Orchestrate a small plan or request as serial context-isolated subagent tasks in a clean-enough Git worktree, tracked in a compact `.xsk/runs/` ledger, with one confirmation gate and unified acceptance at the end. Explicit invocation only. |
+| `xsk-execute-plan` | Orchestrate a small plan or request as serial context-isolated subagent tasks in a clean Git worktree, tracked in a compact `.xsk/runs/` ledger, with one confirmation gate and unified acceptance at the end. Explicit invocation only. |
 
 > [!NOTE]
 > `xsk-bypass-claude` targets Claude Code only; `xsk install` skips it on the other three platforms.
@@ -82,7 +82,7 @@ Nine skills, prefixed `xsk-`:
 ### Choosing a skill
 
 - Use `xsk-think` while the approach or important decisions are unsettled. Once its plan is decision-complete, explicitly choose direct execution for small, reversible work, `xsk-execute-plan` for a suitable execution, or revise the plan. `xsk-think` never invokes an executor automatically.
-- Invoke `xsk-execute-plan` explicitly only for decision-light, context-heavy multi-file or multi-step work that benefits from context-isolated subagents and a run ledger. It requires a Git worktree whose pending changes do not overlap the run's paths, and it refuses rather than guessing when they do. Use direct execution for anything small enough to inspect directly, including a single command or single-file change.
+- Invoke `xsk-execute-plan` explicitly only for decision-light, context-heavy multi-file or multi-step work that benefits from context-isolated subagents and a run ledger. It requires a clean Git worktree and refuses rather than guessing, so commit or stash first. Use direct execution for anything small enough to inspect directly, including a single command or single-file change.
 - For large, high-risk, or cross-session work, create a durable requirement with `xsk-write-req` and use the project's full workflow before implementation.
 - For durable research, use the explicit `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` path. Each transition is user-selected; no skill chains automatically.
 - Use `xsk-check` to review an existing change or diff before merge. After an implementation is accepted, invoke `xsk-archive-req` explicitly to archive its active requirement.
