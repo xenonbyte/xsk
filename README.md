@@ -82,7 +82,7 @@ Nine skills, prefixed `xsk-`:
 ### Choosing a skill
 
 - Use `xsk-think` while the approach or important decisions are unsettled. Once its plan is decision-complete, explicitly choose direct execution for small, reversible work, `xsk-execute-plan` for a suitable execution, or revise the plan. `xsk-think` never invokes an executor automatically.
-- Invoke `xsk-execute-plan` explicitly only for decision-light, context-heavy multi-file or multi-step work that benefits from context-isolated subagents and a run ledger. Use direct execution for a single command or small single-file change.
+- Invoke `xsk-execute-plan` explicitly only for decision-light, context-heavy multi-file or multi-step work that benefits from context-isolated subagents and a run ledger. It establishes a Git baseline, path fingerprints, and anchored checkpoints before the first task, so use direct execution for anything small enough to inspect directly, including a single command or single-file change.
 - For large, high-risk, or cross-session work, create a durable requirement with `xsk-write-req` and use the project's full workflow before implementation.
 - For durable research, use the explicit `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` path. Each transition is user-selected; no skill chains automatically.
 - Use `xsk-check` to review an existing change or diff before merge. After an implementation is accepted, invoke `xsk-archive-req` explicitly to archive its active requirement.

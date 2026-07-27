@@ -373,7 +373,7 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   assert.ok(/self-contained enough to re-dispatch/.test(c), 'ledger tasks re-dispatchable');
   assert.ok(/footprints do not overlap/.test(c), 'parallel only when write footprints disjoint');
   assert.ok(/no code review and no acceptance run/.test(c), 'no per-task code review');
-  assert.ok(/only the unfinished tasks/.test(c) && /pending or failed/.test(c), 'resume semantics');
+  assert.ok(/only unfinished tasks/.test(c) && /pending or failed/.test(c), 'resume semantics');
   assert.ok(/functional acceptance not run/.test(c), 'zero-gate run labeled prominently');
   assert.ok(/warning-level, never a gate/.test(c), 'UI acceptance warning-level');
   assert.ok(/UI acceptance skipped/.test(c), 'unrenderable UI skips without failing');
@@ -399,7 +399,7 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
   const capabilityIndex = c.indexOf('verify that the current harness can dispatch at least one subagent');
   const gitWorktreeIndex = c.indexOf('git rev-parse --is-inside-work-tree');
   const gitHeadIndex = c.indexOf('git rev-parse --verify HEAD');
-  const recoveryIndex = c.indexOf('With `status: running` or `status: failed`, first compute');
+  const recoveryIndex = c.indexOf('First resolve the candidate input identity');
   const ledgerIndex = c.indexOf('Only after the normal gate passes, write the run ledger');
   assert.ok(
     capabilityIndex >= 0 && ledgerIndex >= 0 && capabilityIndex < ledgerIndex,
@@ -422,63 +422,119 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'non-Git and unborn repositories fail explicitly before writes',
   );
   assert.ok(
-    /For a new run or confirmed restart,[\s\S]*?current `HEAD`[\s\S]*?For resume or reuse,[\s\S]*?read the base commit from the existing ledger[\s\S]*?never replace it with current `HEAD`/.test(c),
-    'new runs capture HEAD while resumed runs retain their original base',
+    /record the full current `HEAD` object ID as both the immutable original base commit and the initial last reconciled `HEAD`/.test(c),
+    'records an immutable acceptance base and a separate movement cursor',
   );
   assert.ok(
     /Re-run `git rev-parse --verify HEAD` immediately before every task dispatch, after every subagent returns before attributing its writes, before unified acceptance, and immediately before writing the final fingerprint/.test(c),
     'the committed baseline is rechecked across the full execution timeline',
   );
+  const intervalIndex = c.indexOf(
+    'Before accepting the movement or updating the last reconciled `HEAD`, enumerate and record',
+  );
+  const advanceIndex = c.indexOf('Only after the complete interval is reconciled');
   assert.ok(
-    /Different but with `git merge-base --is-ancestor <recorded base> HEAD` succeeding, history only moved forward[\s\S]*?a plan may legitimately include a commit and the user may commit alongside the run/.test(c),
-    'a fast-forwarded base is reconciled instead of failing the run',
+    intervalIndex >= 0 && advanceIndex > intervalIndex,
+    'reconciles the complete commit interval before advancing the HEAD cursor',
   );
   assert.ok(
-    /on confirmation record the new object ID as the current base while keeping the original and the reason in the ledger/.test(c),
-    'a confirmed forward move updates the base without losing the original',
+    /each commit's complete parent-relative changed-path record,[\s\S]*?paths changed and later reverted inside the interval/.test(c),
+    'commit-range evidence cannot hide transient committed paths',
   );
   assert.ok(
-    /Only when the recorded base is no longer an ancestor was history rewritten under the run:[\s\S]*?record any returned task as `failed` with repository-movement ambiguity/.test(c),
-    'only rewritten history blocks attribution and acceptance',
+    /Reconcile every committed path through the same allowed-path, scope-drift, dirty-overlap preservation, and user-ownership rules as task output[\s\S]*?A clean worktree after a commit is not evidence that the interval was in scope/.test(c),
+    'committed paths receive full attribution and scope checks',
   );
   assert.ok(
-    /If writable-workspace subagent dispatch is unavailable, stop before offering a recovery choice or writing a ledger/.test(c),
-    'missing subagent capability stops before recovery and ledger creation',
+    /Advancing the movement cursor never advances the acceptance baseline:[\s\S]*?remain anchored to the immutable original base[\s\S]*?bind the final reconciled `HEAD`/.test(c),
+    'acceptance remains anchored to the run-start commit',
   );
   assert.ok(
-    /This is a one-time capability check, not a precondition re-tested before each ledger line/.test(c),
-    'capability is checked once, not before every ledger update',
+    /When the last reconciled `HEAD` is no longer an ancestor,[\s\S]*?keep any returned task nonterminal with repository-movement ambiguity/.test(c),
+    'rewritten history blocks attribution without fabricating a terminal task state',
+  );
+  assert.ok(
+    /If writable-workspace subagent dispatch or that store is unavailable, stop before offering a recovery choice or writing a ledger/.test(c),
+    'missing execution or anchor capability stops before recovery and ledger creation',
+  );
+  assert.ok(
+    /Do not require or claim that it is write-protected from subagents or project commands[\s\S]*?they run as the same user with the same filesystem access, so no such boundary exists to ask for/.test(c),
+    'the anchor store does not assert a write boundary the runtime cannot provide',
+  );
+  assert.ok(
+    /the hash chain below detects accidental divergence, interrupted writes, and inconsistent state[\s\S]*?Neither detects deliberate tampering by anything that has write access, and neither may be reported as if it did/.test(c),
+    'the anchor states what it actually proves and what it does not',
+  );
+  assert.ok(
+    /durable evidence-anchor store for the main workflow, kept outside the Git worktree, addressable by repository identity and run slug without trusting the workspace ledger, and able to survive context compaction and session recovery/.test(c),
+    'recovery evidence has durable storage addressable without the workspace ledger',
+  );
+  assert.ok(
+    /These are one-time capability checks, not preconditions re-tested before each ledger line/.test(c),
+    'capabilities are checked once, not before every ledger update',
   );
   assert.ok(
     /Never silently degrade `xsk-execute-plan` into inline execution/.test(c),
     'missing capability never falls back to silent inline execution',
   );
   assert.ok(
-    /With `status: running` or `status: failed`, first compute the current invocation's input identity from its supplied `source`, exact goal, and complete plan or request text[\s\S]*?compare it with the recorded one before offering resume/.test(c),
-    'running and failed runs compare the complete current input before resume',
+    /If any replacement `source`, goal, or complete plan or request text is supplied,[\s\S]*?never substitute the persisted preimage/.test(c),
+    'replacement input is always recomputed rather than filled from old evidence',
+  );
+  assert.ok(
+    /explicitly selects this existing run and asks only to resume or reuse it without supplying replacement input,[\s\S]*?verify the persisted input preimage[\s\S]*?use those exact saved bytes as the candidate/.test(c),
+    'compacted sessions can resume from the anchored confirmed input',
+  );
+  assert.ok(
+    /missing, unreadable, length-mismatched, digest-mismatched, or unanchored input preimage makes resume and reuse unavailable/.test(c),
+    'invalid persisted input evidence fails closed',
+  );
+  assert.ok(
+    /With `status: running` or `status: failed`, compare the resolved candidate input identity with the recorded one before offering resume/.test(c),
+    'running and failed runs compare a reproducible candidate identity before resume',
   );
   assert.ok(
     /Only an exact match may offer the user resume or restart/.test(c),
     'only matching input identity reaches the resume choice',
   );
   assert.ok(
-    /If it differs, is missing, uses an unrecognized scheme, or cannot be reproduced from the complete current input, resume is unavailable:[\s\S]*?offer only restart[\s\S]*?explicitly confirmed through steps 3 and 4 before any old task can be dispatched/.test(c),
+    /If it differs or uses an unrecognized scheme, resume is unavailable:[\s\S]*?offer only restart[\s\S]*?explicitly confirmed through steps 3 and 4 before any old task can be dispatched/.test(c),
     'changed or unverifiable input requires restart and reconfirmation',
   );
   assert.ok(
-    /On a matching resume, continue from the current worktree[\s\S]*?keep done tasks[\s\S]*?only the unfinished tasks whose state is pending or failed/.test(c),
+    /On a matching resume, continue from the current worktree[\s\S]*?keep `done` tasks[\s\S]*?only unfinished tasks whose state is pending or failed/.test(c),
     'resume keeps done work and dispatches unfinished tasks only',
   );
   assert.ok(
-    /If all tasks are already done, resume at unified acceptance and reporting/.test(c),
-    'all-done running runs resume at acceptance and reporting',
+    /If all tasks are terminal, resume at unified acceptance and reporting/.test(c),
+    'all-terminal running runs resume at acceptance and reporting',
   );
   assert.ok(
-    /Restart also uses the current worktree as its baseline[\s\S]*?never resets, reverts, or otherwise rolls back existing source changes/.test(c),
-    'restart replaces the ledger without pretending to roll back source',
+    /Restart uses the current worktree without reset or rollback/.test(c),
+    'restart preserves the current workspace',
   );
   assert.ok(
-    /With `status: done`, compare exactly two identities, both recomputed from material that still exists/.test(c),
+    /compare every old actual-touched path's current state with its most recent anchored terminal `done` or `failed` fingerprint/.test(c),
+    'restart checks old terminal ownership evidence',
+  );
+  assert.ok(
+    /An exact match retains prior-run-output attribution[\s\S]*?select exactly which matching prior-run output paths the restarted run may supersede/.test(c),
+    'restart carries only explicitly selected old outputs',
+  );
+  assert.ok(
+    /never transfers ownership of pre-run dirty or ignored content[\s\S]*?carried dirty-overlap preservation reference/.test(c),
+    'restart selection preserves original user ownership',
+  );
+  assert.ok(
+    /A missing or mismatching terminal fingerprint makes the checkpoint-to-restart difference user state or ambiguity[\s\S]*?never include it in the supersede selection/.test(c),
+    'restart protects post-checkpoint user changes',
+  );
+  assert.ok(
+    /Persist the carryover record[\s\S]*?under a new anchored run generation before replacing the old workspace artifacts/.test(c),
+    'restart persists provenance before replacing old evidence',
+  );
+  assert.ok(
+    /With `status: done`, compare exactly two identities, both recomputed from anchored material that still exists/.test(c),
     'reusing a done ledger starts by identifying the current input and workspace',
   );
   assert.ok(
@@ -486,11 +542,15 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'reuse revalidates the workspace against the recorded fingerprint',
   );
   assert.ok(
-    /Only when both identities match may reuse without dispatch be offered alongside a new run/.test(c),
-    'reuse requires the input identity and the workspace fingerprint to match',
+    /Only when both identities and the protected evidence anchor match may reuse without dispatch be offered alongside a new run/.test(c),
+    'reuse requires the input identity, workspace fingerprint, and evidence anchor to match',
   );
   assert.ok(
-    /When the input identity differs, is missing, or cannot be reproduced from the complete current input,[\s\S]*?offer only a new run with a newly confirmed envelope/.test(c),
+    /A run with incomplete ignored-path coverage has no acceptance fingerprint and is never eligible for reuse[\s\S]*?cannot reconstruct the missing pre-run ignored state, produce a verified fingerprint, or promote that run to verified/.test(c),
+    'fresh checks cannot upgrade a run whose hidden ignored baseline never existed',
+  );
+  assert.ok(
+    /When the input identity differs, is missing, or cannot be reproduced through the supplied replacement input or verified persisted preimage,[\s\S]*?offer only a new run with a newly confirmed envelope/.test(c),
     'changed execution input cannot reuse old acceptance against an unchanged worktree',
   );
   assert.ok(
@@ -506,7 +566,7 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'a stale or incomplete done result is history, not a verified conclusion',
   );
   assert.ok(
-    /A `done` run whose result was already reported and consumed may instead be retired by deleting its ledger/.test(c),
+    /A `done` run whose result was already reported and consumed may instead be retired by deleting its workspace artifacts and protected anchor in one explicit retirement operation/.test(c),
     'a reported done run has a sanctioned retirement path',
   );
   assert.ok(/A prior `failed` run is never overwritten silently/.test(c), 'failed ledgers are not silently replaced');
@@ -519,7 +579,7 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'explains why a resumed run must not recapture dirty paths',
   );
   assert.ok(
-    /A missing or invalid base, dirty-overlap baseline, companion artifact, input identity, or required terminal output checkpoint cannot be reconstructed from the current worktree during resume/.test(c),
+    /A missing or invalid original base, reconciled-HEAD receipt, dirty-overlap baseline, companion artifact, input identity or preimage, evidence anchor, or required terminal output checkpoint cannot be reconstructed from the current worktree during resume/.test(c),
     'resume never recreates historical provenance from a worktree containing run output',
   );
   assert.ok(
@@ -530,34 +590,114 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     /Report the affected paths as ambiguous and require explicit resolution or restart; never recapture current state and call it the original baseline/.test(c),
     'missing recovery evidence fails closed instead of being recaptured',
   );
-  assert.ok(/A restart always rebuilds and re-confirms the envelope/.test(c), 'restart re-confirms a fresh envelope');
+  assert.ok(
+    /A restart follows the carryover procedure above and rebuilds and re-confirms the envelope/.test(c),
+    'restart re-confirms a fresh envelope without discarding proven carryover',
+  );
 });
 
 test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints survive an interruption', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
   assert.ok(
-    /\[pending\|in-flight\|done\|failed\] \(attempt <n>\)/.test(c),
-    'the ledger tracks an in-flight state and an attempt number',
+    /\[pending\|in-flight\|reconciling\|done\|failed\] \(attempt <n>\)/.test(c),
+    'the ledger tracks dispatch, reconciliation, terminal states, and an attempt number',
   );
   assert.ok(
-    /The ledger is write-ahead:[\s\S]*?same write that sets a task's line to `in-flight` with its attempt number,[\s\S]*?record path-state fingerprints for its complete footprint, the current Git changed-path inventory, and the current ignored-state checkpoint, then dispatch it/.test(c),
+    /The ledger is write-ahead:[\s\S]*?same anchored write that sets a task's line to `in-flight` with its attempt number,[\s\S]*?record path-state fingerprints for its complete footprint, the current Git changed-path inventory, and the current ignored-state checkpoint, then dispatch it/.test(c),
     'task state and attempt-start evidence are persisted before dispatch',
   );
   assert.ok(
-    /Recording state only after a task finishes would let an interruption between dispatch and result leave finished work looking like work that never started/.test(c),
-    'the write-ahead rule names the duplicate-execution hazard it closes',
+    /Recording only a terminal state after a task finishes would let an interruption between return and reconciliation leave unresolved work looking complete/.test(c),
+    'the write-ahead rule names the premature-completion hazard it closes',
   );
   assert.ok(
     /A task left at `in-flight` was dispatched and never reported back[\s\S]*?never re-dispatch it blind/.test(c),
     'an in-flight task is never blindly re-dispatched on resume',
   );
   assert.ok(
-    /ask the user whether to re-dispatch it as the next attempt, accept the existing state and mark it done, or fail it/.test(c),
-    'in-flight recovery offers the three honest outcomes',
+    /ask the user whether to re-dispatch it as the next attempt, move the existing state to `reconciling`, or fail it after reconciliation/.test(c),
+    'in-flight recovery never promotes existing state directly to done',
   );
   assert.ok(
-    /record a path-state fingerprint that binds the index and worktree separately: exact Git index entries for every stage, including stage number, mode, and blob object ID or an absent tombstone/.test(c),
-    'dirty paths retain exact index entries rather than only a status label',
+    /A task left at `reconciling` has returned and must not be re-dispatched:[\s\S]*?continue its incomplete touched-path, preservation, and scope decisions[\s\S]*?never enter unified acceptance while any task remains `reconciling`/.test(c),
+    'resume completes returned-task reconciliation before dispatch or acceptance',
+  );
+  assert.ok(
+    /first post-return checkpoint changes only `in-flight` to `reconciling`[\s\S]*?reported outcome and compact result, current Git changed-path inventory, current covered ignored scan, and observable fingerprints/.test(c),
+    'the first returned-task checkpoint is durable but nonterminal',
+  );
+  assert.ok(
+    /`reconciling` is nonterminal and blocks dependent dispatch and unified acceptance/.test(c),
+    'reconciliation blocks dependents and acceptance',
+  );
+  assert.ok(
+    /`xsk-execute-plan-path-state-v1:sha256:<64 lowercase hexadecimal characters>`/.test(c),
+    'path-state fingerprints have a versioned identity',
+  );
+  assert.ok(
+    /RFC 8785 JSON Canonicalization Scheme \(JCS\), encoded as UTF-8 without a BOM,[\s\S]*?hashed by an executed SHA-256 implementation/.test(c),
+    'path-state serialization and hashing are canonical',
+  );
+  assert.ok(
+    c.includes(
+      '{"git_object_format":"sha1","index":[],"path":"relative/path","schema":"xsk-execute-plan-path-state-v1","worktree":{"kind":"absent"}}',
+    ),
+    'path state has one literal top-level schema and absent tombstone',
+  );
+  assert.ok(
+    c.includes('{"mode":"100644","oid":"<lowercase hexadecimal object ID>","stage":0}'),
+    'index entries have fixed literal keys and scalar encodings',
+  );
+  assert.ok(
+    /Every displayed key is mandatory, including the empty index tombstone, and no undisplayed key is allowed/.test(c),
+    'path-state records cannot add, omit, or rename keys',
+  );
+  assert.ok(
+    /Git status, rename, and copy records may discover candidate paths only:[\s\S]*?no derived status field enters this preimage[\s\S]*?fingerprint both sides of a discovered rename or copy as separate paths/.test(c),
+    'path-state digests do not depend on local Git status configuration',
+  );
+  assert.deepEqual(
+    [
+      '{"kind":"absent"}',
+      '{"byte_length":0,"kind":"regular","mode":"100644","sha256":"<64 lowercase hexadecimal characters>"}',
+      '{"kind":"symlink","mode":"120777","target_base64":"<RFC 4648 base64 with padding>"}',
+      '{"kind":"directory","manifest":"xsk-execute-plan-directory-manifest-v1:sha256:<64 lowercase hexadecimal characters>","mode":"040755"}',
+    ].map((shape) => c.includes(shape)),
+    [true, true, true, true],
+    'every worktree variant has a fixed tag and literal key set',
+  );
+  assert.ok(
+    /An index mode is Git's exact six-character ASCII octal mode[\s\S]*?A filesystem mode is the six-character, zero-padded ASCII octal encoding of `lstat\(2\)\.st_mode & 0177777`[\s\S]*?no umask, executable-bit, or file-type normalization/.test(c),
+    'mode sources and normalization are fixed',
+  );
+  assert.ok(
+    /Hash regular worktree files from their raw bytes[\s\S]*?A Git blob object ID is index evidence and is never a substitute/.test(c),
+    'worktree content uses SHA-256 independently from Git object IDs',
+  );
+  assert.ok(
+    c.includes('{"entries":[],"schema":"xsk-execute-plan-directory-manifest-v1"}'),
+    'directory manifests have one literal top-level schema',
+  );
+  assert.deepEqual(
+    [
+      '{"kind":"directory","mode":"040755","path":"empty-directory"}',
+      '{"byte_length":0,"kind":"regular","mode":"100644","path":"file","sha256":"<64 lowercase hexadecimal characters>"}',
+      '{"kind":"symlink","mode":"120777","path":"link","target_base64":"<RFC 4648 base64 with padding>"}',
+    ].map((shape) => c.includes(shape)),
+    [true, true, true],
+    'every directory entry variant has a fixed tag and literal key set',
+  );
+  assert.ok(
+    /Every displayed entry key is mandatory for that variant, and no additional key is allowed[\s\S]*?including empty directories but excluding the manifest root itself[\s\S]*?Do not follow symlinks[\s\S]*?Sort entries by the UTF-8 byte order/.test(c),
+    'directory manifests are complete, closed, non-following, and deterministically sorted',
+  );
+  assert.ok(
+    /xsk-execute-plan-directory-manifest-v1:sha256:<64 lowercase hexadecimal characters>/.test(c),
+    'directory manifests have an explicit comparable identity format',
+  );
+  assert.ok(
+    /If a required path is unreadable,[\s\S]*?or cannot be represented exactly by this format,[\s\S]*?do not resume, reuse, or mint a verified acceptance fingerprint/.test(c),
+    'unrepresentable path state fails closed',
   );
   assert.ok(
     /A status label such as `MM` is never a substitute for the exact index entries, because index content can change while that label and the worktree bytes stay the same/.test(c),
@@ -580,19 +720,19 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'durable overlap evidence lands after confirmation but before dispatch',
   );
   assert.ok(
-    /For every touched dirty-overlap path,[\s\S]*?compare the base-commit state, saved pre-run index and worktree patches or full snapshots, and post-task index and worktree states after the task returns/.test(c),
+    /For every touched dirty-overlap path,[\s\S]*?compare the immutable-original-base state, saved pre-run index and worktree patches or full snapshots, and post-task index and worktree states after the task returns/.test(c),
     'dirty-overlap staged and unstaged preservation is checked after task execution',
   );
   assert.ok(
-    /If the comparison shows loss, or cannot prove preservation,[\s\S]*?mark the task `failed` for preservation ambiguity[\s\S]*?pause before dispatching dependents/.test(c),
+    /If the comparison shows loss, or cannot prove preservation,[\s\S]*?keep the task `reconciling`, set its provisional outcome to `failed` for preservation ambiguity[\s\S]*?pause before dispatching dependents/.test(c),
     'inconclusive overlap preservation fails closed without overwriting the worktree',
   );
   assert.ok(
-    /Update a task to `done` or `failed` only in the same ledger write that records its compact result, actual touched paths, and output fingerprints/.test(c),
-    'done and failed transitions atomically record output fingerprints',
+    /Only after the actual touched-path set and terminal output fingerprints are complete,[\s\S]*?every dirty-overlap preservation result[\s\S]*?every committed-path attribution[\s\S]*?every scope item and user decision is resolved[\s\S]*?atomically change `reconciling` to `done` or `failed`/.test(c),
+    'terminal task state is written only after all attribution and decisions',
   );
   assert.ok(
-    /A failed task can leave partial output, so `failed` requires the same evidence as `done`/.test(c),
+    /A failed task can leave partial output, so a failed outcome requires the same evidence as a successful one/.test(c),
     'failed tasks retain fingerprints for partial output',
   );
   assert.ok(
@@ -604,12 +744,44 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'post-completion edits are protected as user changes or ambiguities',
   );
   assert.ok(
-    /Acceptance fingerprint: <current confirmed base commit; ignored-path coverage state; exact sorted path set from Git-different, expected, tolerated, and actual-touched paths; each path's path-state fingerprint/.test(c),
-    'acceptance binds the base, coverage state, and an exact status-aware workspace path set',
+    /Acceptance fingerprint: <immutable original base commit; final reconciled HEAD; ignored-path coverage state; exact UTF-8-byte-sorted path set[\s\S]*?xsk-execute-plan-path-state-v1 fingerprint/.test(c),
+    'acceptance binds the immutable base, final HEAD, coverage, and canonical path state',
   );
   assert.ok(
-    /persist an acceptance-command checkpoint in the ledger[\s\S]*?In the same next ledger write, record the command's exit result and compact output evidence, actual touched paths, terminal fingerprints, and overlap result/.test(c),
+    /persist an anchored acceptance-command checkpoint[\s\S]*?In the same next anchored ledger write, record the command's exit result and compact output evidence, actual touched paths, terminal fingerprints, and overlap result/.test(c),
     'project commands also use durable before-and-after checkpoints',
+  );
+  assert.ok(
+    /schema `xsk-execute-plan-anchor-v1`[\s\S]*?canonical repository identity, slug, run generation, monotonic sequence, immutable original base, last reconciled `HEAD`, input identity, SHA-256 of the ledger's exact bytes,[\s\S]*?exact sorted artifact manifest/.test(c),
+    'the protected anchor binds run identity and every evidence artifact',
+  );
+  assert.ok(
+    /Find this record in the anchor store by repository identity, slug, and generation; a handle copied from the workspace ledger is never the authority, because the ledger is one of the artifacts under inspection/.test(c),
+    'anchor lookup does not trust a possibly modified ledger',
+  );
+  assert.ok(
+    /A mismatch means the artifacts and the anchor have diverged, from an interrupted write, an outside edit, or a bug[\s\S]*?the cause is not something the chain can tell you/.test(c),
+    'an anchor mismatch is reported as divergence of unknown cause, not as proven tampering',
+  );
+  assert.ok(
+    /recoverable two-phase anchored checkpoint[\s\S]*?append a protected pending anchor revision[\s\S]*?atomically replace the workspace artifacts[\s\S]*?promote the pending revision to committed/.test(c),
+    'run-artifact updates use recoverable two-phase anchoring',
+  );
+  assert.ok(
+    /On recovery, a pending revision may be finalized only when the workspace artifacts match its intended hashes,[\s\S]*?any other state is an evidence-integrity failure/.test(c),
+    'interrupted anchor transactions recover deterministically or fail closed',
+  );
+  assert.ok(
+    /Verify the committed anchor against every run artifact before and after every subagent dispatch, project command, and fresh verifier; before consuming baseline evidence; and before resume, reuse, unified acceptance, or final fingerprinting/.test(c),
+    'anchor integrity is checked around every untrusted writer and recovery decision',
+  );
+  assert.ok(
+    /It is an evidence-integrity failure whatever the cause[\s\S]*?do not dispatch, attribute output, accept, reuse, or produce an acceptance fingerprint/.test(c),
+    'diverged evidence cannot drive execution or reusable proof',
+  );
+  assert.ok(
+    /Ledger and companion paths may be excluded from the implementation diff only after this independent anchor check passes/.test(c),
+    'run artifacts are excluded only when independently protected',
   );
 });
 
@@ -620,20 +792,32 @@ test('skill-behavior: xsk-execute-plan: result reuse is bound to reproducible id
     'the input identity has one versioned, explicit format',
   );
   assert.ok(
-    /hash that file with the platform's SHA-256 utility \(`shasum -a 256` or `sha256sum`\)/.test(c),
-    'the identity names the tool that computes it rather than assuming a hash can be written by hand',
+    /Hash the exact bytes with an executed SHA-256 implementation \(`shasum -a 256`, `sha256sum`, or Node's built-in `crypto`\)/.test(c),
+    'the identity names executed implementations rather than assuming a hash',
   );
   assert.ok(
-    /A hash written from inspection is a fabricated identity, and a fabricated identity is worse than none/.test(c),
-    'fabricating a digest is called out as worse than omitting one',
+    /never write a digest from inspection/.test(c),
+    'input identities cannot be fabricated from inspection',
   );
   assert.ok(
-    /When no SHA-256 utility is available, record `xsk-execute-plan-input-v1:text` instead and store the source, goal, and complete input text verbatim/.test(c),
-    'a verbatim-text fallback keeps the identity checkable without a hash tool',
+    /Always persist the exact preimage bytes used for the identity, including the `sha256` form, at `\.xsk\/runs\/<slug>\.baseline\/input-v1`/.test(c),
+    'hashed identities retain their complete recovery preimage',
+  );
+  assert.ok(
+    /Record its relative path, decimal byte length, and matching SHA-256 identity in the ledger,[\s\S]*?bind the file into the protected artifact anchor/.test(c),
+    'the preimage is length-checked and independently anchored',
+  );
+  assert.ok(
+    /Input preimage: <\.xsk\/runs\/<slug>\.baseline\/input-v1; decimal byte length; matching SHA-256 identity>/.test(c),
+    'the ledger references the exact persisted input preimage',
+  );
+  assert.ok(
+    /If SHA-256 cannot actually be computed, stop before the normal gate/.test(c),
+    'missing identity tooling fails before execution',
   );
   assert.ok(/A missing or unrecognized scheme is an identity failure/.test(c), 'unsupported identity formats fail closed');
   assert.ok(
-    /compare exactly two identities, both recomputed from material that still exists/.test(c),
+    /compare exactly two identities, both recomputed from anchored material that still exists/.test(c),
     'reuse compares only identities that can actually be reproduced',
   );
   assert.ok(
@@ -645,8 +829,8 @@ test('skill-behavior: xsk-execute-plan: result reuse is bound to reproducible id
     'an unsatisfiable comparison is rejected as fake rigor rather than kept',
   );
   assert.ok(
-    /Only when both identities match may reuse without dispatch be offered alongside a new run/.test(c),
-    'reuse needs the input identity and the workspace fingerprint to match',
+    /Only when both identities and the protected evidence anchor match may reuse without dispatch be offered alongside a new run/.test(c),
+    'reuse needs the input, workspace, and evidence anchor to match',
   );
   assert.ok(
     /Any functional or UI fix attempt adds a full task definition and dependency to the final ordered task list/.test(c),
@@ -657,12 +841,12 @@ test('skill-behavior: xsk-execute-plan: result reuse is bound to reproducible id
     'the accepted result describes the effective specification',
   );
   assert.ok(
-    /A later comparison must match the exact path set as well as every entry; an added or missing path is a mismatch/.test(c),
+    /A later comparison must match the anchor, original base, final reconciled `HEAD`, exact path set, and every entry; an added or missing path is a mismatch/.test(c),
     'workspace revalidation compares both path membership and path state',
   );
   assert.ok(
-    /Exclude Git metadata and this run's ledger and companion baseline artifacts to avoid a self-referential fingerprint, but include `\.xsk\/\.gitignore` when changed/.test(c),
-    'the acceptance fingerprint excludes its own run artifacts without hiding the gitignore change',
+    /Exclude Git metadata and run artifacts only after the protected anchor matches, but include `\.xsk\/\.gitignore` when changed/.test(c),
+    'the acceptance fingerprint excludes independently anchored artifacts without hiding the gitignore change',
   );
 });
 
@@ -684,7 +868,7 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'records actual paths and compares them with confirmed allowed paths',
   );
   assert.ok(
-    /independently derive every detectable actual touched path from the base, attempt-start records, current Git state, ignored-state comparison, and the subagent report,[\s\S]*?reconcile these sources rather than trusting the report alone/.test(c),
+    /independently derive every detectable actual touched path from the immutable original base, reconciled commit-range receipts, attempt-start records, current Git state, ignored-state comparison, and the subagent report,[\s\S]*?reconcile these sources rather than trusting the report alone/.test(c),
     'the main workflow independently checks the subagent touched-path report',
   );
   assert.ok(
@@ -705,11 +889,11 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'a pre-declared side-effect path does not trip the drift check',
   );
   assert.ok(
-    /Any other unexpected path is scope drift: pause before dispatching that task's dependents[\s\S]*?keep the worktree intact[\s\S]*?ask the user once whether to accept it into scope or fail the task/.test(c),
+    /Any other unexpected path is scope drift:[\s\S]*?keep the task `reconciling`, persist the unresolved paths and pending decision in an anchored checkpoint,[\s\S]*?ask the user once whether to accept it into scope or fail the task/.test(c),
     'undeclared drift pauses dependents and asks the user instead of failing silently',
   );
   assert.ok(
-    /Accepting records the path in the envelope and continues; failing marks the task failed and stops its dependents/.test(c),
+    /Accepting records the path in the envelope and resolves that item; failing sets the provisional task outcome to failed and stops its dependents/.test(c),
     'both drift outcomes are defined',
   );
   assert.ok(
@@ -717,28 +901,44 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'the drift question does not reintroduce per-task code review',
   );
   assert.ok(
-    /cover every ignored path that falls inside a declared task or verification-command footprint, plus any additional ignored root the user names at the gate/.test(c),
-    'the ignored baseline is scoped to footprints plus user-named roots',
+    /`Ignored-path coverage: footprint` is the default\. It covers every ignored path inside a declared task or verification-command footprint, plus any additional ignored root the user names at the gate/.test(c),
+    'footprint coverage is the default scope, not a degraded one',
   );
   assert.ok(
-    /A workspace-wide walk is not required and is rarely affordable[\s\S]*?would make the skill unusable in exactly the repositories it targets/.test(c),
-    'a whole-workspace ignored walk is rejected as unaffordable in real repositories',
+    /Offer repository-wide when the user wants assurance beyond the declared footprints, and say what it costs/.test(c),
+    'repository-wide coverage is an opt-in with its cost disclosed',
   );
   assert.ok(
-    /Record `Ignored-path coverage: complete` when every in-scope root is represented/.test(c),
-    'coverage is judged against the declared scope, not the whole workspace',
+    /Footprint coverage supports a verified acceptance, but its scope claim is bounded and must be reported that way[\s\S]*?never that nothing was written elsewhere in the ignored namespace/.test(c),
+    'footprint coverage can verify, with its claim explicitly bounded',
   );
   assert.ok(
-    /rescan the in-scope ignored roots[\s\S]*?changed existing ignored descendant or a newly created ignored path under those roots[\s\S]*?even when the subagent omitted it/.test(c),
+    /Only repository-wide coverage carries the unbounded claim, and neither may be described as the other/.test(c),
+    'the two verifiable scopes cannot be reported interchangeably',
+  );
+  assert.ok(
+    /one dependency or build directory routinely holds far more files than the entire run touches, and the walk repeats after every writer/.test(c),
+    'the cost of repository-wide coverage is stated rather than assumed away',
+  );
+  assert.ok(
+    /`Ignored-path coverage: repository-wide` additionally enumerates and fingerprints the whole worktree's ignored namespace,[\s\S]*?repeats that enumeration in every post-writer scan/.test(c),
+    'repository-wide coverage means a whole-workspace baseline and rescan',
+  );
+  assert.ok(
+    /Record `Ignored-path coverage: incomplete` with the covered roots, the uncovered remainder, and the reason whenever a selected root cannot be enumerated or fingerprinted[\s\S]*?Never treat unobserved ignored state as unchanged/.test(c),
+    'a root that cannot be read is explicit incomplete evidence',
+  );
+  assert.ok(
+    /rescan every covered ignored root[\s\S]*?repository-wide coverage also repeats the whole-namespace enumeration[\s\S]*?changed existing ignored descendant or a newly created ignored path under those roots[\s\S]*?even when the subagent omitted it/.test(c),
     'ignored writes omitted from a task report are independently detected within scope',
   );
   assert.ok(
-    /If coverage is incomplete, record the ambiguity and the affected paths, mark the acceptance criteria that depended on them `skipped` with that reason, and report it prominently/.test(c),
-    'incomplete ignored coverage degrades the affected criteria instead of blocking the run',
+    /If a covered root becomes unreadable, downgrade the scope to incomplete, record the uncovered namespace and resulting ambiguity, mark every acceptance criterion that depended on it `skipped` with that reason, and report it prominently/.test(c),
+    'a root lost mid-run downgrades the scope and skips the criteria that relied on it',
   );
   assert.ok(
-    /Incomplete coverage never passes as verified and is carried into the acceptance fingerprint, where a later comparison treats it as non-matching/.test(c),
-    'incomplete coverage still cannot masquerade as verified or as reusable proof',
+    /Incomplete coverage never passes as verified and requires `Acceptance fingerprint: not produced`, so the run cannot be reused/.test(c),
+    'incomplete coverage cannot mint verified or reusable proof',
   );
   assert.ok(
     /self-contained prompt containing the applicable hard rules[\s\S]*?allowed and expected write paths[\s\S]*?default prohibition on dependency introduction, remote or external actions, destructive or irreversible actions, and platform permission prompts/.test(c),
@@ -796,24 +996,28 @@ test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional a
     'verification-command writes are declared in the confirmed envelope',
   );
   assert.ok(
-    /Immediately before each command, persist an acceptance-command checkpoint in the ledger[\s\S]*?After each command returns, derive and fingerprint every detectable write[\s\S]*?Reconcile those writes through the same allowed-path, scope-drift, dirty-overlap preservation, and ignored-coverage rules as a task/.test(c),
+    /Immediately before each command, persist an anchored acceptance-command checkpoint[\s\S]*?After each command returns and the protected artifact anchor still matches, derive and fingerprint every detectable write[\s\S]*?Reconcile those writes through the same allowed-path, scope-drift, dirty-overlap preservation, and ignored-coverage rules as a task/.test(c),
     'command-induced writes receive durable checkpoints and full scope checks',
   );
   assert.ok(
-    /confirmed goal, acceptance criteria, execution envelope, current confirmed base commit, pre-existing dirty-path fingerprints, in-scope ignored-state baseline and post-command scan,[\s\S]*?terminal task-output and acceptance-command fingerprints, actual touched paths, command output evidence, and the post-command actual diff/.test(c),
-    'verifier receives the post-command envelope, baselines, checkpoints, paths, and diff',
+    /confirmed goal, acceptance criteria, execution envelope, immutable original base commit, final reconciled `HEAD`, complete reconciled commit-range receipts,[\s\S]*?terminal task-output and acceptance-command fingerprints, actual touched paths, command output evidence, and the post-command actual diff derived against the immutable original base commit/.test(c),
+    'verifier receives the immutable base, reconciled history, checkpoints, and post-command diff',
   );
   assert.ok(
-    /independently proves that every dirty-overlap staged and unstaged user change survived, verifies scope and leftovers, and returns evidence without modifying files/.test(c),
-    'verifier checks user-change preservation and scope without editing',
+    /independently proves that every dirty-overlap staged and unstaged user change survived, verifies committed-path attribution, scope, and leftovers, and returns evidence without modifying files/.test(c),
+    'verifier checks user-change preservation, committed attribution, and scope without editing',
   );
   assert.ok(
     /Missing or inconclusive overlap evidence is a functional failure, not a pass inferred from hashes or status labels/.test(c),
     'fresh verification cannot infer overlap preservation',
   );
   assert.ok(
-    /Incomplete ignored-path coverage is not a failure by itself: it marks the criteria that depended on it `skipped`, is recorded in the fingerprint, and can never be reported as a pass/.test(c),
-    'incomplete coverage degrades to skipped instead of blocking every run',
+    /Footprint coverage verifies scope within its covered roots and must be reported with that bound stated; only repository-wide coverage supports an unbounded ignored-scope claim/.test(c),
+    'acceptance states the bound of the coverage scope it actually had',
+  );
+  assert.ok(
+    /Incomplete coverage is not a failure by itself: it marks every criterion that depended on the lost roots `skipped`, forces `Acceptance fingerprint: not produced`, disables reuse, and can never be reported as verified/.test(c),
+    'only genuinely lost coverage degrades to skipped and blocks reusable proof',
   );
   assert.ok(
     /A verifier mismatch or command failure is also reported as a functional failure/.test(c),
@@ -842,8 +1046,12 @@ test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional a
     'post-UI revalidation verifies the resulting post-command workspace',
   );
   assert.ok(
-    /Produce an acceptance fingerprint only when the latest functional acceptance passed, all scope-verification evidence is conclusive, and the final status is `done`[\s\S]*?Otherwise write `Acceptance fingerprint: not produced`/.test(c),
+    /Produce an acceptance fingerprint only when ignored-path coverage is footprint or repository-wide, the latest functional acceptance passed, all other scope-verification evidence is conclusive, every task is terminal, the evidence anchor matches, and the final status is `done`[\s\S]*?Incomplete ignored-path coverage always writes `Acceptance fingerprint: not produced`/.test(c),
     'reusable proof is produced only for a fully verified done workspace',
+  );
+  assert.ok(
+    /Incomplete coverage alone may leave otherwise successful tasks and observable checks at `status: done`, but the report must label the result unverified and non-reusable/.test(c),
+    'scoped ignored coverage downgrades proof without falsifying observable results',
   );
 });
 

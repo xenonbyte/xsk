@@ -82,7 +82,7 @@ xsk help
 ### Choosing a skill
 
 - 当方案或重要决策尚未确定时使用 `xsk-think`。plan 达到 decision-complete 后，显式选择：小型、可逆工作直接执行；适合的任务用 `xsk-execute-plan`；或继续调整 plan。`xsk-think` 不会自动调用 executor。
-- 仅对 decision-light、context-heavy，且涉及多文件或多步骤、能从 context-isolated subagent 和 run ledger 获益的工作显式调用 `xsk-execute-plan`。单条命令或小型单文件改动应直接执行。
+- 仅对 decision-light、context-heavy，且涉及多文件或多步骤、能从 context-isolated subagent 和 run ledger 获益的工作显式调用 `xsk-execute-plan`。它会在第一个任务开始前建立 Git 基线、路径指纹与 anchored checkpoint，因此凡是小到可以直接核对的改动（包括单条命令或单文件改动）都应直接执行。
 - 大型、高风险或跨会话工作应先用 `xsk-write-req` 建立 durable requirement，再进入项目的 full workflow 后实施。
 - 需要持久化研究时，显式采用 `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` 路径。每次转换都由用户选择，skill 不会自动串联。
 - 用 `xsk-check` 评审已有 change 或 diff，再合入。implementation 验收通过后，显式调用 `xsk-archive-req` 归档 active requirement。
