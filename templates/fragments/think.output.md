@@ -6,6 +6,13 @@ A **Proposed Design Summary** with these parts:
 - A short **Gotchas** table of the traps to avoid.
 - **Open Questions**, if any, that only the user can resolve.
 
-Then stop and wait for approval. Do not begin implementation.
+Then stop. What you are waiting for follows the routing below: answers to Open Questions, nothing at all after a pure judgment, or a next-action selection. Do not begin implementation.
 
-If the plan is executable (not a pure judgment) and no Open Questions remain, offer to run it with `xsk-execute-plan`. Offer only; never invoke it automatically.
+Apply the outcome routing:
+
+- With unresolved **Open Questions**, ask them and stop. Do not show execution choices.
+- For a pure judgment with no implementation, stop after the summary. Do not show execution choices.
+- For a decision-complete plan with no Open Questions that fits direct or delegated execution, add **Next Action** with three choices: direct execution, `xsk-execute-plan`, or revise the design. Mark one as recommended and state why.
+- For large, high-risk, cross-session, or full-specification work, replace the lightweight execution choices with a route to `xsk-write-req` or the repository's fuller workflow, plus an option to revise or pause. Do not offer `xsk-execute-plan`.
+
+Selecting `xsk-execute-plan` is an explicit invocation, not immediate dispatch: that skill must still present and confirm its task breakdown and acceptance envelope. Offer choices only; never invoke an executor automatically.

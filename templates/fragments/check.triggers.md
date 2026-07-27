@@ -1,5 +1,5 @@
 Match the intent, not the exact words. Common cues:
 
-- "看看代码", "检查一下", "有没有问题", "是否需要优化", "合并前"
-- "review my code", "check this change", "before merge", "code review"
-- any request to review a diff, a pull request, or a pending change for correctness and quality before it ships
+- "审查这次改动", "看一下这个 diff", "评审这个 PR", "合并前检查"
+- "review these changes", "check this diff", "review this PR", "before merge"
+- any request to review an existing diff, pull request, or pending code change for correctness and quality before it ships

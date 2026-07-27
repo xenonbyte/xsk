@@ -5,7 +5,7 @@ description: Review a code change before it ships. Check scope drift, enforce ha
 
 # xsk-check
 
-Review a code change against its goal and the available evidence before it merges or ships. Read the diff, find the real problems, fix what is safe to fix, surface the rest, and verify before calling anything done. Distilled from the default-review discipline of Waza `/check`.
+Review a code change against its goal and the available evidence before it merges or ships. Read the diff, find the real problems, identify and report what is safe to fix, surface the rest, and verify before calling anything done. Distilled from the default-review discipline of Waza `/check`.
 
 It reviews code diffs and changes, not prose. A clean review is a valid result: do not invent findings to look thorough, and do not approve a risky change just to seem agreeable.
 
@@ -13,9 +13,9 @@ It reviews code diffs and changes, not prose. A clean review is a valid result: 
 
 Match the intent, not the exact words. Common cues:
 
-- "看看代码", "检查一下", "有没有问题", "是否需要优化", "合并前"
-- "review my code", "check this change", "before merge", "code review"
-- any request to review a diff, a pull request, or a pending change for correctness and quality before it ships
+- "审查这次改动", "看一下这个 diff", "评审这个 PR", "合并前检查"
+- "review these changes", "check this diff", "review this PR", "before merge"
+- any request to review an existing diff, pull request, or pending code change for correctness and quality before it ships
 
 ## How it works
 
@@ -25,7 +25,7 @@ Match the intent, not the exact words. Common cues:
 
 **3. Classify depth, then state it.** Quick for a small, low-risk change. Standard for a medium one. Deep when the diff is large or touches auth, payments, data mutation, or destructive operations. A deeper change earns a wider read of its callers and consumers, not just the changed lines.
 
-**4. Apply the hard stops. Fix or flag before merge.**
+**4. Apply the hard stops. Flag every hit before merge.**
 
 - No unverified claims. Never write "tests pass", "I verified", or "this fixes it" unless the command output is in front of you this session. If the judgment comes from reading the code, say that instead.
 - Re-read before citing a fact. Line numbers, file state, branch position, and fallback behavior go stale. Re-check them in this pass rather than trusting memory.
@@ -58,7 +58,7 @@ Then a short sign-off block:
 - files changed, and the size of the diff
 - scope: on target, or the specific drift
 - review depth: quick, standard, or deep
-- hard stops: how many found, fixed, and deferred
+- hard stops: how many found, and how many are still open
 - new tests, if the change needed them
 - doc debt: any invariant the change introduced that the project docs do not yet capture
 - verification: the command that ran, and whether it passed

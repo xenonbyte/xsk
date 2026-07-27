@@ -64,6 +64,57 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
   assert.ok(/never an automatic invocation/.test(c), 'offer never auto-runs');
 });
 
+test('skill-behavior: xsk-think: routes only decision-complete work by execution shape', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-think'));
+  assert.ok(
+    /If any Open Questions remain,[\s\S]*?Do not show execution choices yet/.test(c),
+    'unresolved questions remain in design without execution choices',
+  );
+  assert.ok(
+    /pure judgment[\s\S]*?Do not show execution choices/.test(c),
+    'pure judgments stop without execution choices',
+  );
+  assert.ok(
+    /decision-complete executable plan with no Open Questions[\s\S]*?classify its execution shape/.test(c),
+    'only ready executable plans reach execution-shape routing',
+  );
+  assert.ok(
+    /one-file change, a single command, or other low-context work/.test(c),
+    'one-file and single-command work recommends direct execution',
+  );
+  assert.ok(
+    /only for decision-light work whose execution is context-heavy enough/.test(c),
+    'context-heavy execution is the necessary condition for recommending execute-plan',
+  );
+  assert.ok(
+    /Being multi-file or multi-step is a signal of that, never a substitute for it: two one-line edits in two files stay direct execution/.test(c),
+    'file or step count alone does not route work to the executor',
+  );
+  assert.ok(
+    /large, high-risk, cross-session work[\s\S]*?xsk-write-req[\s\S]*?Do not recommend the lightweight executor/.test(c),
+    'large or high-risk work routes to a fuller workflow',
+  );
+  assert.ok(
+    /present all three user choices: direct execution, `xsk-execute-plan`, or revise the design/.test(c),
+    'ready lightweight work presents all three next actions',
+  );
+  assert.ok(/Label one choice as recommended/.test(c), 'routing labels a shape-based recommendation');
+  assert.ok(/\*\*Next Action\*\*/.test(c), 'output names the next-action section');
+  assert.ok(
+    /Choosing `xsk-execute-plan` counts as an explicit invocation[\s\S]*?does not skip that skill's task-breakdown and acceptance confirmation gate/.test(c),
+    'executor selection is explicit but retains its own confirmation gate',
+  );
+  assert.ok(/never an automatic invocation/.test(c), 'routing never auto-invokes an executor');
+  assert.ok(
+    /planning-only[\s\S]*?When the user picks direct execution, implementation continues outside this skill through the normal conversation/.test(c),
+    'planning-only holds: direct execution runs outside this skill',
+  );
+  assert.ok(
+    /What you are waiting for follows the routing below: answers to Open Questions, nothing at all after a pure judgment, or a next-action selection/.test(c),
+    'the stop condition matches the routed outcome instead of always awaiting approval',
+  );
+});
+
 test('skill-behavior: xsk-bypass-claude — settings.local.json only, Claude-only refusal, malformed-file refusal', () => {
   const c = body(skills.find((s) => s.name === 'xsk-bypass-claude'));
   assert.ok(/bypassPermissions/.test(c), 'sets bypassPermissions');
@@ -182,14 +233,32 @@ test('skill-behavior: xsk-archive-req — validates slug, stops on collision, wr
     'writes and confirms the archive before removing the source');
 });
 
-test('skill-behavior: xsk-check — diff review, hard stops, evidence gate, verify, stop', () => {
+test('skill-behavior: xsk-check — review-only diff scope, hard stops, evidence gate, verify, stop', () => {
   const c = body(skills.find((s) => s.name === 'xsk-check'));
+  assert.ok(
+    /identify and report what is safe to fix/.test(c),
+    'purpose identifies fixes without claiming to apply them',
+  );
+  assert.ok(!/fix what is safe to fix/.test(c), 'purpose does not contradict review-only behavior');
   assert.ok(/scope drift/i.test(c), 'checks scope drift');
   assert.ok(/hard stops/i.test(c), 'applies hard stops');
   assert.ok(/HIGH or CRITICAL/.test(c) && /exact file and line/.test(c), 'evidence-gated findings');
   assert.ok(/inherited stdio/.test(c), 'carries the captured-output hard stop (A+ distillation)');
   assert.ok(/regression test/.test(c), 'requires a regression test for bug fixes');
-  assert.ok(/看看代码/.test(c) && /code review/i.test(c), 'multilingual triggers');
+  assert.ok(
+    /审查这次改动/.test(c) && /看一下这个 diff/.test(c) && /评审这个 PR/.test(c) && /合并前检查/.test(c),
+    'Chinese triggers are scoped to an existing change',
+  );
+  assert.ok(
+    /review these changes/.test(c) && /check this diff/.test(c) && /review this PR/.test(c) && /before merge/.test(c),
+    'English triggers are scoped to an existing change',
+  );
+  assert.ok(!/是否需要优化/.test(c), 'does not claim generic optimization advisory intent');
+  assert.ok(!/Fix or flag/.test(c), 'hard stops are flagged, not silently fixed during a review');
+  assert.ok(
+    /hard stops: how many found, and how many are still open/.test(c),
+    'sign-off counts open hard stops rather than claiming fixes',
+  );
   assert.ok(/Do not merge, push/.test(c), 'stops without merging or pushing');
   assert.ok(/Review-only by default/.test(c), 'defaults to review-only');
   assert.ok(/Do not modify files during a review/.test(c), 'does not edit files during a review');
@@ -287,6 +356,14 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
   assert.ok(/explicitly invoked only/.test(c), 'explicit invocation only');
   assert.ok(/never self-triggers/.test(c), 'no self-trigger on execution intent');
+  assert.ok(
+    /user's selection of the `xsk-execute-plan` next action offered by `xsk-think`/.test(c),
+    'think handoff counts as a direct explicit request',
+  );
+  assert.ok(
+    /Selection from `xsk-think` is an explicit invocation[\s\S]*?never means immediate task dispatch[\s\S]*?never bypasses this skill's task-breakdown and acceptance confirmation gate/.test(c),
+    'think handoff starts intake without bypassing the execution envelope gate',
+  );
   assert.ok(/simple to decide but heavy to execute/.test(c), 'fit criterion');
   assert.ok(/cheaper done inline/.test(c), 'inline counter-example');
   assert.ok(/ordered task list/.test(c) && /acceptance criteria before anything executes/.test(c), 'decompose then acceptance first');
@@ -294,7 +371,7 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   assert.ok(/never overwrite an existing `\.xsk\/\.gitignore`/.test(c), 'gitignore append-only discipline');
   assert.ok(/self-contained prompt/.test(c), 'self-contained subagent dispatch');
   assert.ok(/self-contained enough to re-dispatch/.test(c), 'ledger tasks re-dispatchable');
-  assert.ok(/file sets do not overlap/.test(c), 'parallel only when file sets disjoint');
+  assert.ok(/footprints do not overlap/.test(c), 'parallel only when write footprints disjoint');
   assert.ok(/no review and no acceptance run/.test(c), 'no per-task review');
   assert.ok(/only the unfinished tasks/.test(c) && /pending or failed/.test(c), 'resume semantics');
   assert.ok(/functional acceptance not run/.test(c), 'zero-gate run labeled prominently');
@@ -306,15 +383,240 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   assert.ok(/discard any earlier functional result/.test(c), 'stale functional result cannot determine final status');
   assert.ok(/The final `done` or `failed` comes from the latest functional acceptance/.test(c), 'latest functional result determines final status');
   assert.ok(
-    c.includes("Fill `## Result`: each task's compact outcome, each acceptance criterion's `pass`, `fail`, or `skipped` status (with the reason when skipped)"),
-    'behavior contract represents skipped checks with reasons',
+    /Fill `## Result`:[\s\S]*?each acceptance criterion's `pass`, `fail`, or `skipped` status \(with the reason when skipped\)/.test(c),
+    'behavior result represents skipped checks with reasons',
   );
   assert.ok(
-    c.includes("the acceptance report with each criterion's `pass`, `fail`, or `skipped` status (including a reason for `skipped`)"),
-    'output contract represents skipped checks with reasons',
+    /acceptance report with each criterion's `pass`, `fail`, or `skipped` status \(including a reason for `skipped`\)/.test(c),
+    'output result represents skipped checks with reasons',
   );
   assert.ok(/`skipped` is non-failing but must never look like `pass`/.test(c), 'skipped remains honest and non-failing');
   assert.ok(/Do not commit, push/.test(c), 'stops without committing');
+});
+
+test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve worktree state', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  const capabilityIndex = c.indexOf('verify that the current harness can dispatch at least one subagent');
+  const recoveryIndex = c.indexOf('With `status: running` or `status: failed`, ask the user once');
+  const ledgerIndex = c.indexOf('Only after the normal gate passes, write the run ledger');
+  assert.ok(
+    capabilityIndex >= 0 && ledgerIndex >= 0 && capabilityIndex < ledgerIndex,
+    'checks writable-workspace subagent capability before writing the ledger',
+  );
+  assert.ok(
+    recoveryIndex >= 0 && capabilityIndex < recoveryIndex,
+    'checks capability before spending a recovery question the run cannot act on',
+  );
+  assert.ok(
+    /If writable-workspace subagent dispatch is unavailable, stop before offering a recovery choice or writing a ledger/.test(c),
+    'missing subagent capability stops before recovery and ledger creation',
+  );
+  assert.ok(
+    /This is a one-time capability check, not a precondition re-tested before each ledger line/.test(c),
+    'capability is checked once, not before every ledger update',
+  );
+  assert.ok(
+    /Never silently degrade `xsk-execute-plan` into inline execution/.test(c),
+    'missing capability never falls back to silent inline execution',
+  );
+  assert.ok(
+    /With `status: running` or `status: failed`, ask the user once whether to resume or restart/.test(c),
+    'running and failed runs both enter explicit recovery',
+  );
+  assert.ok(
+    /Resume from the current worktree[\s\S]*?keep done tasks[\s\S]*?only the unfinished tasks whose state is pending or failed/.test(c),
+    'resume keeps done work and dispatches unfinished tasks only',
+  );
+  assert.ok(
+    /If all tasks are already done, resume at unified acceptance and reporting/.test(c),
+    'all-done running runs resume at acceptance and reporting',
+  );
+  assert.ok(
+    /Restart also uses the current worktree as its baseline[\s\S]*?never resets, reverts, or otherwise rolls back existing source changes/.test(c),
+    'restart replaces the ledger without pretending to roll back source',
+  );
+  assert.ok(
+    /With `status: done`, recompute the acceptance fingerprint recorded in `## Result` first/.test(c),
+    'reusing a done ledger starts by revalidating its fingerprint',
+  );
+  assert.ok(
+    /While it still matches the worktree, offer either to reuse the recorded result without dispatch or to start a new run that overwrites the ledger after confirmation/.test(c),
+    'a matching fingerprint keeps the explicit reuse-or-replace choice',
+  );
+  assert.ok(
+    /When it does not match, or the ledger carries no fingerprint[\s\S]*?present the recorded result as history only[\s\S]*?must never be reported as verified/.test(c),
+    'a stale or unfingerprinted done result is history, not a verified conclusion',
+  );
+  assert.ok(
+    /A `done` run whose result was already reported and consumed may instead be retired by deleting its ledger/.test(c),
+    'a reported done run has a sanctioned retirement path',
+  );
+  assert.ok(/A prior `failed` run is never overwritten silently/.test(c), 'failed ledgers are not silently replaced');
+  assert.ok(
+    /A resume reuses the execution envelope recorded in the ledger, including its pre-existing dirty-path baseline/.test(c),
+    'resume reuses the recorded envelope instead of recapturing a polluted baseline',
+  );
+  assert.ok(
+    /recapturing that baseline would misread them as the user's work/.test(c),
+    'explains why a resumed run must not recapture dirty paths',
+  );
+  assert.ok(
+    /When the ledger carries no `## Execution Envelope` section[\s\S]*?rebuild and re-confirm the envelope through steps 3 and 4 before dispatching anything/.test(c),
+    'a ledger without a recorded envelope is rebuilt and re-confirmed before dispatch',
+  );
+  assert.ok(/A restart always rebuilds and re-confirms it/.test(c), 'restart re-confirms a fresh envelope');
+});
+
+test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints survive an interruption', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(
+    /\[pending\|in-flight\|done\|failed\] \(attempt <n>\)/.test(c),
+    'the ledger tracks an in-flight state and an attempt number',
+  );
+  assert.ok(
+    /The ledger is write-ahead: set a task's line to `in-flight` with its attempt number and write the ledger out before dispatching it/.test(c),
+    'task state is persisted before dispatch, not after completion',
+  );
+  assert.ok(
+    /Recording state only after a task finishes would let an interruption between dispatch and result leave finished work looking like work that never started/.test(c),
+    'the write-ahead rule names the duplicate-execution hazard it closes',
+  );
+  assert.ok(
+    /A task left at `in-flight` was dispatched and never reported back[\s\S]*?never re-dispatch it blind/.test(c),
+    'an in-flight task is never blindly re-dispatched on resume',
+  );
+  assert.ok(
+    /ask the user whether to re-dispatch it as the next attempt, accept the existing state and mark it done, or fail it/.test(c),
+    'in-flight recovery offers the three honest outcomes',
+  );
+  assert.ok(
+    /each with a content fingerprint \(a hash of its current content, or an equivalent saved patch\)/.test(c),
+    'the dirty-path baseline stores content fingerprints, not just paths',
+  );
+  assert.ok(
+    /A bare path list cannot show later whether those changes survived/.test(c),
+    'explains why a path list alone cannot prove user work was preserved',
+  );
+  assert.ok(
+    /sort the current changes into three groups against the recorded fingerprints[\s\S]*?anything else appeared during the interruption/.test(c),
+    'resume separates user work, this run\'s writes, and edits made during the interruption',
+  );
+  assert.ok(
+    /Report that third group and treat it as the user's, never as this run's to overwrite/.test(c),
+    'edits made during an interruption belong to the user',
+  );
+  assert.ok(
+    /Record the acceptance fingerprint: the base commit plus every changed path and its content hash/.test(c),
+    'acceptance records a fingerprint a later session can revalidate',
+  );
+});
+
+test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope drift', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(
+    /isolated from the main conversation's context, not from one another's filesystem/.test(c),
+    'subagent isolation is contextual rather than filesystem isolation',
+  );
+  assert.ok(/They share the same writable workspace/.test(c), 'subagents share one writable workspace');
+  assert.ok(/Capture the pre-existing dirty paths before dispatch/.test(c), 'captures the dirty-path baseline');
+  assert.ok(/For every task, name its expected write paths/.test(c), 'records expected write paths per task');
+  assert.ok(
+    /the tolerated side-effect paths that correct work legitimately touches \(regenerated output, lockfiles, formatter fallout\)/.test(c),
+    'the envelope declares tolerated side-effect paths up front',
+  );
+  assert.ok(
+    /actual touched paths/.test(c) && /confirmed allowed paths/.test(c),
+    'records actual paths and compares them with confirmed allowed paths',
+  );
+  assert.ok(
+    /A task's write footprint is its expected write paths together with its tolerated side-effect paths/.test(c),
+    'the parallel-safety footprint unions expected and tolerated paths',
+  );
+  assert.ok(
+    /a shared lockfile or regenerated index counts even when the two tasks own different source files/.test(c),
+    'shared side-effect targets block parallel dispatch',
+  );
+  assert.ok(/Never revert an unexpected path automatically/.test(c), 'unexpected paths are never auto-reverted');
+  assert.ok(
+    /A path the confirmed envelope already lists as a tolerated side effect is recorded in the ledger and the run carries on/.test(c),
+    'a pre-declared side-effect path does not trip the drift check',
+  );
+  assert.ok(
+    /Any other unexpected path is scope drift: pause before dispatching that task's dependents[\s\S]*?keep the worktree intact[\s\S]*?ask the user once whether to accept it into scope or fail the task/.test(c),
+    'undeclared drift pauses dependents and asks the user instead of failing silently',
+  );
+  assert.ok(
+    /Accepting records the path in the envelope and continues; failing marks the task failed and stops its dependents/.test(c),
+    'both drift outcomes are defined',
+  );
+  assert.ok(
+    /That question is an exception check against the confirmed envelope, not the per-task review this skill omits/.test(c),
+    'the drift question does not reintroduce per-task review',
+  );
+  assert.ok(
+    /self-contained prompt containing the applicable hard rules[\s\S]*?allowed and expected write paths[\s\S]*?explicit prohibition on remote, external, destructive, or irreversible actions/.test(c),
+    'subagent prompts carry hard rules, path boundaries, and action prohibitions',
+  );
+});
+
+test('skill-behavior: xsk-execute-plan: one normal gate preserves exceptional authority boundaries', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(/One normal confirmation gate/.test(c), 'keeps one normal workflow gate');
+  assert.ok(
+    /never authorizes a new product decision, scope expansion, dependency introduction, external or remote mutation, destructive or irreversible action, or a platform permission prompt/.test(c),
+    'normal gate does not broaden decision, scope, dependency, external, destructive, or permission authority',
+  );
+  assert.ok(
+    /stop before it and obtain focused user authorization/.test(c),
+    'exceptional actions require focused authorization',
+  );
+  assert.ok(
+    /A newly discovered decision that changes implementation also returns to the user/.test(c),
+    'new implementation decisions return to the user',
+  );
+});
+
+test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional acceptance', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(
+    /First dispatch a fresh verifier that did not implement any task/.test(c),
+    'unified acceptance uses a fresh non-implementing verifier',
+  );
+  assert.ok(
+    /confirmed goal, acceptance criteria, execution envelope, pre-existing dirty-path baseline, actual touched paths, and actual diff/.test(c),
+    'verifier receives the goal, criteria, scope baseline, paths, and diff',
+  );
+  assert.ok(
+    /checks the implementation against the goal and criteria, verifies scope and leftovers, and returns evidence without modifying files/.test(c),
+    'verifier checks intent and scope without editing',
+  );
+  assert.ok(
+    /Then run the project's own verification commands \(tests, lint, build\)/.test(c),
+    'fresh verification is followed by project-native checks',
+  );
+  assert.ok(
+    /A verifier mismatch or command failure is reported as a functional failure/.test(c),
+    'verifier and command failures both affect functional acceptance',
+  );
+  assert.ok(
+    /at most one bounded fix attempt for unified functional acceptance[\s\S]*?repeat the fresh-verifier check and project commands once/.test(c),
+    'functional fixes are bounded and fully reverified',
+  );
+  assert.ok(
+    /Dispatch that fix as its own write-ahead ledger task under the full step 5 contract: allowed paths, the drift comparison, and the same prohibition on external, destructive, and irreversible actions/.test(c),
+    'the functional fix attempt inherits the full task contract and is tracked in the ledger',
+  );
+  assert.ok(/Between tasks there is no review and no acceptance run/.test(c), 'still has no per-task review');
+  assert.ok(/warning-level, never a gate/.test(c), 'UI fidelity remains advisory');
+  assert.ok(/at most 2 rounds by default/.test(c), 'UI fixes remain bounded');
+  assert.ok(
+    /Every UI fix round is dispatched as its own write-ahead ledger task under the full step 5 contract too: allowed paths, the drift comparison, and the same authority prohibitions/.test(c),
+    'UI fix rounds inherit the same contract instead of only the file-set rule',
+  );
+  assert.ok(
+    /After any UI fix that changed files, the functional revalidation includes a fresh verifier/.test(c),
+    'post-UI revalidation repeats the fresh verifier',
+  );
 });
 
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {

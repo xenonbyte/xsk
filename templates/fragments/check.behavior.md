@@ -4,7 +4,7 @@
 
 **3. Classify depth, then state it.** Quick for a small, low-risk change. Standard for a medium one. Deep when the diff is large or touches auth, payments, data mutation, or destructive operations. A deeper change earns a wider read of its callers and consumers, not just the changed lines.
 
-**4. Apply the hard stops. Fix or flag before merge.**
+**4. Apply the hard stops. Flag every hit before merge.**
 
 - No unverified claims. Never write "tests pass", "I verified", or "this fixes it" unless the command output is in front of you this session. If the judgment comes from reading the code, say that instead.
 - Re-read before citing a fact. Line numbers, file state, branch position, and fallback behavior go stale. Re-check them in this pass rather than trusting memory.

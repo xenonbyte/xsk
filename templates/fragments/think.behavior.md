@@ -12,4 +12,18 @@
 
 **5. No placeholders in an approved plan.** A plan is not done until every decision is concrete. No "TBD", no "figure out later", no "we'll decide". If a decision is genuinely open, it goes into Open Questions for the user to resolve, not into the plan body.
 
-**6. Stop at the design.** Output the plan, surface blocking ambiguities as one-sentence questions, then stop. Implementation starts only on explicit approval. When the design is an executable plan with concrete steps (not a pure judgment such as "not worth doing" or "keep things as they are") and every Open Question is resolved, offer `xsk-execute-plan` as the executor; the offer is a proposal, never an automatic invocation. Otherwise do not offer it.
+**6. Classify the outcome before offering a handoff.**
+
+- If any Open Questions remain, ask only those questions and continue the design after the user answers. Do not show execution choices yet.
+- If the result is a pure judgment such as "not worth doing", "keep things as they are", or "no change is needed", report that judgment and stop. Do not show execution choices.
+- If the result is a decision-complete executable plan with no Open Questions, classify its execution shape before recommending a next action.
+
+**7. Route ready work by execution shape.**
+
+- **Direct execution.** Recommend this for a one-file change, a single command, or other low-context work where delegation would add more ceremony than it removes.
+- **`xsk-execute-plan`.** Recommend this only for decision-light work whose execution is context-heavy enough that context-isolated subagents and a run ledger would help. Being multi-file or multi-step is a signal of that, never a substitute for it: two one-line edits in two files stay direct execution.
+- **Fuller workflow.** For large, high-risk, cross-session work, or work that still needs a durable full specification, route to `xsk-write-req` or the repository's fuller workflow. Do not recommend the lightweight executor.
+
+For the first two shapes, present all three user choices: direct execution, `xsk-execute-plan`, or revise the design and remain planning-only. Label one choice as recommended and give one sentence tied to the execution shape. Choosing `xsk-execute-plan` counts as an explicit invocation of that skill, but it does not skip that skill's task-breakdown and acceptance confirmation gate. The choice is never an automatic invocation.
+
+**8. Stop at the design.** Output the plan and routing, then stop and wait for approval or an explicit next-action selection. Do not write code. Choosing direct execution is explicit approval to implement through the normal conversation. Choosing revise keeps `xsk-think` planning-only and asks the user what to change; it is not a recursive skill invocation.
