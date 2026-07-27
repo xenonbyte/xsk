@@ -74,7 +74,7 @@ xsk help
 | `xsk-check` | 在改动合入前评审：范围漂移、hard stops、证据门控的发现项，再验证后签收。蒸馏自 Waza `/check`。 |
 | `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
 | `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
-| `xsk-execute-plan` | 把一个小型 plan 或需求拆解成 context-isolated 的 subagent 任务，它们共享同一个可写 workspace，记录进 `.xsk/runs/` ledger；只设一个确认门，全部完成后统一验收。仅限显式调用。 |
+| `xsk-execute-plan` | 在足够干净的 Git worktree 中，把一个小型 plan 或需求编排成串行的 context-isolated subagent 任务，记录进精简的 `.xsk/runs/` ledger；只设一个确认门，全部完成后统一验收。仅限显式调用。 |
 
 > [!NOTE]
 > `xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。
@@ -82,7 +82,7 @@ xsk help
 ### Choosing a skill
 
 - 当方案或重要决策尚未确定时使用 `xsk-think`。plan 达到 decision-complete 后，显式选择：小型、可逆工作直接执行；适合的任务用 `xsk-execute-plan`；或继续调整 plan。`xsk-think` 不会自动调用 executor。
-- 仅对 decision-light、context-heavy，且涉及多文件或多步骤、能从 context-isolated subagent 和 run ledger 获益的工作显式调用 `xsk-execute-plan`。它会在第一个任务开始前建立 Git 基线、路径指纹与 anchored checkpoint，因此凡是小到可以直接核对的改动（包括单条命令或单文件改动）都应直接执行。
+- 仅对 decision-light、context-heavy，且涉及多文件或多步骤、能从 context-isolated subagent 和 run ledger 获益的工作显式调用 `xsk-execute-plan`。它要求 Git worktree 中已有的未提交改动与本次运行的路径不相交，相交时直接拒绝而不去猜测。凡是小到可以直接核对的改动（包括单条命令或单文件改动）都应直接执行。
 - 大型、高风险或跨会话工作应先用 `xsk-write-req` 建立 durable requirement，再进入项目的 full workflow 后实施。
 - 需要持久化研究时，显式采用 `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` 路径。每次转换都由用户选择，skill 不会自动串联。
 - 用 `xsk-check` 评审已有 change 或 diff，再合入。implementation 验收通过后，显式调用 `xsk-archive-req` 归档 active requirement。
