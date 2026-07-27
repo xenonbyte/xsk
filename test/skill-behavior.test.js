@@ -372,7 +372,7 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
   assert.ok(/self-contained prompt/.test(c), 'self-contained subagent dispatch');
   assert.ok(/self-contained enough to re-dispatch/.test(c), 'ledger tasks re-dispatchable');
   assert.ok(/footprints do not overlap/.test(c), 'parallel only when write footprints disjoint');
-  assert.ok(/no review and no acceptance run/.test(c), 'no per-task review');
+  assert.ok(/no code review and no acceptance run/.test(c), 'no per-task code review');
   assert.ok(/only the unfinished tasks/.test(c) && /pending or failed/.test(c), 'resume semantics');
   assert.ok(/functional acceptance not run/.test(c), 'zero-gate run labeled prominently');
   assert.ok(/warning-level, never a gate/.test(c), 'UI acceptance warning-level');
@@ -397,7 +397,9 @@ test('skill-behavior: xsk-execute-plan — explicit-only, ledger, isolated dispa
 test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve worktree state', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
   const capabilityIndex = c.indexOf('verify that the current harness can dispatch at least one subagent');
-  const recoveryIndex = c.indexOf('With `status: running` or `status: failed`, ask the user once');
+  const gitWorktreeIndex = c.indexOf('git rev-parse --is-inside-work-tree');
+  const gitHeadIndex = c.indexOf('git rev-parse --verify HEAD');
+  const recoveryIndex = c.indexOf('With `status: running` or `status: failed`, first compute');
   const ledgerIndex = c.indexOf('Only after the normal gate passes, write the run ledger');
   assert.ok(
     capabilityIndex >= 0 && ledgerIndex >= 0 && capabilityIndex < ledgerIndex,
@@ -406,6 +408,38 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
   assert.ok(
     recoveryIndex >= 0 && capabilityIndex < recoveryIndex,
     'checks capability before spending a recovery question the run cannot act on',
+  );
+  assert.ok(
+    gitWorktreeIndex >= 0
+      && gitHeadIndex >= 0
+      && gitWorktreeIndex < recoveryIndex
+      && gitHeadIndex < recoveryIndex
+      && gitHeadIndex < ledgerIndex,
+    'requires a Git worktree with a valid HEAD before recovery or ledger creation',
+  );
+  assert.ok(
+    /If the workspace is not a Git worktree or has no valid `HEAD` commit,[\s\S]*?stop without writing anything/.test(c),
+    'non-Git and unborn repositories fail explicitly before writes',
+  );
+  assert.ok(
+    /For a new run or confirmed restart,[\s\S]*?current `HEAD`[\s\S]*?For resume or reuse,[\s\S]*?read the base commit from the existing ledger[\s\S]*?never replace it with current `HEAD`/.test(c),
+    'new runs capture HEAD while resumed runs retain their original base',
+  );
+  assert.ok(
+    /Re-run `git rev-parse --verify HEAD` immediately before every task dispatch, after every subagent returns before attributing its writes, before unified acceptance, and immediately before writing the final fingerprint/.test(c),
+    'the committed baseline is rechecked across the full execution timeline',
+  );
+  assert.ok(
+    /Different but with `git merge-base --is-ancestor <recorded base> HEAD` succeeding, history only moved forward[\s\S]*?a plan may legitimately include a commit and the user may commit alongside the run/.test(c),
+    'a fast-forwarded base is reconciled instead of failing the run',
+  );
+  assert.ok(
+    /on confirmation record the new object ID as the current base while keeping the original and the reason in the ledger/.test(c),
+    'a confirmed forward move updates the base without losing the original',
+  );
+  assert.ok(
+    /Only when the recorded base is no longer an ancestor was history rewritten under the run:[\s\S]*?record any returned task as `failed` with repository-movement ambiguity/.test(c),
+    'only rewritten history blocks attribution and acceptance',
   );
   assert.ok(
     /If writable-workspace subagent dispatch is unavailable, stop before offering a recovery choice or writing a ledger/.test(c),
@@ -420,11 +454,19 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'missing capability never falls back to silent inline execution',
   );
   assert.ok(
-    /With `status: running` or `status: failed`, ask the user once whether to resume or restart/.test(c),
-    'running and failed runs both enter explicit recovery',
+    /With `status: running` or `status: failed`, first compute the current invocation's input identity from its supplied `source`, exact goal, and complete plan or request text[\s\S]*?compare it with the recorded one before offering resume/.test(c),
+    'running and failed runs compare the complete current input before resume',
   );
   assert.ok(
-    /Resume from the current worktree[\s\S]*?keep done tasks[\s\S]*?only the unfinished tasks whose state is pending or failed/.test(c),
+    /Only an exact match may offer the user resume or restart/.test(c),
+    'only matching input identity reaches the resume choice',
+  );
+  assert.ok(
+    /If it differs, is missing, uses an unrecognized scheme, or cannot be reproduced from the complete current input, resume is unavailable:[\s\S]*?offer only restart[\s\S]*?explicitly confirmed through steps 3 and 4 before any old task can be dispatched/.test(c),
+    'changed or unverifiable input requires restart and reconfirmation',
+  );
+  assert.ok(
+    /On a matching resume, continue from the current worktree[\s\S]*?keep done tasks[\s\S]*?only the unfinished tasks whose state is pending or failed/.test(c),
     'resume keeps done work and dispatches unfinished tasks only',
   );
   assert.ok(
@@ -436,16 +478,32 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'restart replaces the ledger without pretending to roll back source',
   );
   assert.ok(
-    /With `status: done`, recompute the acceptance fingerprint recorded in `## Result` first/.test(c),
-    'reusing a done ledger starts by revalidating its fingerprint',
+    /With `status: done`, compare exactly two identities, both recomputed from material that still exists/.test(c),
+    'reusing a done ledger starts by identifying the current input and workspace',
   );
   assert.ok(
-    /While it still matches the worktree, offer either to reuse the recorded result without dispatch or to start a new run that overwrites the ledger after confirmation/.test(c),
-    'a matching fingerprint keeps the explicit reuse-or-replace choice',
+    /a freshly computed workspace fingerprint against the one recorded in `## Result`, matching the exact path set as well as every path-state fingerprint/.test(c),
+    'reuse revalidates the workspace against the recorded fingerprint',
   );
   assert.ok(
-    /When it does not match, or the ledger carries no fingerprint[\s\S]*?present the recorded result as history only[\s\S]*?must never be reported as verified/.test(c),
-    'a stale or unfingerprinted done result is history, not a verified conclusion',
+    /Only when both identities match may reuse without dispatch be offered alongside a new run/.test(c),
+    'reuse requires the input identity and the workspace fingerprint to match',
+  );
+  assert.ok(
+    /When the input identity differs, is missing, or cannot be reproduced from the complete current input,[\s\S]*?offer only a new run with a newly confirmed envelope/.test(c),
+    'changed execution input cannot reuse old acceptance against an unchanged worktree',
+  );
+  assert.ok(
+    /the old task outputs do not prove that a revised plan was implemented/.test(c),
+    'revised input cannot take an acceptance-only shortcut',
+  );
+  assert.ok(
+    /When the input identity matches but the workspace fingerprint differs or is missing,[\s\S]*?fresh unified acceptance against the current state may be offered/.test(c),
+    'acceptance-only revalidation is limited to an unchanged plan on a moved workspace',
+  );
+  assert.ok(
+    /present the old result as history only[\s\S]*?must never be reported as verified/.test(c),
+    'a stale or incomplete done result is history, not a verified conclusion',
   );
   assert.ok(
     /A `done` run whose result was already reported and consumed may instead be retired by deleting its ledger/.test(c),
@@ -461,10 +519,18 @@ test('skill-behavior: xsk-execute-plan: capability gate and recovery preserve wo
     'explains why a resumed run must not recapture dirty paths',
   );
   assert.ok(
-    /When the ledger carries no `## Execution Envelope` section[\s\S]*?rebuild and re-confirm the envelope through steps 3 and 4 before dispatching anything/.test(c),
-    'a ledger without a recorded envelope is rebuilt and re-confirmed before dispatch',
+    /A missing or invalid base, dirty-overlap baseline, companion artifact, input identity, or required terminal output checkpoint cannot be reconstructed from the current worktree during resume/.test(c),
+    'resume never recreates historical provenance from a worktree containing run output',
   );
-  assert.ok(/A restart always rebuilds and re-confirms it/.test(c), 'restart re-confirms a fresh envelope');
+  assert.ok(
+    /missing ignored-state baseline, coverage record, or acceptance-command checkpoint needed to attribute post-command writes/.test(c),
+    'resume also requires ignored-state and command-write provenance',
+  );
+  assert.ok(
+    /Report the affected paths as ambiguous and require explicit resolution or restart; never recapture current state and call it the original baseline/.test(c),
+    'missing recovery evidence fails closed instead of being recaptured',
+  );
+  assert.ok(/A restart always rebuilds and re-confirms the envelope/.test(c), 'restart re-confirms a fresh envelope');
 });
 
 test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints survive an interruption', () => {
@@ -474,8 +540,8 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'the ledger tracks an in-flight state and an attempt number',
   );
   assert.ok(
-    /The ledger is write-ahead: set a task's line to `in-flight` with its attempt number and write the ledger out before dispatching it/.test(c),
-    'task state is persisted before dispatch, not after completion',
+    /The ledger is write-ahead:[\s\S]*?same write that sets a task's line to `in-flight` with its attempt number,[\s\S]*?record path-state fingerprints for its complete footprint, the current Git changed-path inventory, and the current ignored-state checkpoint, then dispatch it/.test(c),
+    'task state and attempt-start evidence are persisted before dispatch',
   );
   assert.ok(
     /Recording state only after a task finishes would let an interruption between dispatch and result leave finished work looking like work that never started/.test(c),
@@ -490,24 +556,113 @@ test('skill-behavior: xsk-execute-plan: write-ahead ledger and fingerprints surv
     'in-flight recovery offers the three honest outcomes',
   );
   assert.ok(
-    /each with a content fingerprint \(a hash of its current content, or an equivalent saved patch\)/.test(c),
-    'the dirty-path baseline stores content fingerprints, not just paths',
+    /record a path-state fingerprint that binds the index and worktree separately: exact Git index entries for every stage, including stage number, mode, and blob object ID or an absent tombstone/.test(c),
+    'dirty paths retain exact index entries rather than only a status label',
+  );
+  assert.ok(
+    /A status label such as `MM` is never a substitute for the exact index entries, because index content can change while that label and the worktree bytes stay the same/.test(c),
+    'path fingerprints detect index-only changes hidden behind the same Git status',
   );
   assert.ok(
     /A bare path list cannot show later whether those changes survived/.test(c),
     'explains why a path list alone cannot prove user work was preserved',
   );
   assert.ok(
-    /sort the current changes into three groups against the recorded fingerprints[\s\S]*?anything else appeared during the interruption/.test(c),
-    'resume separates user work, this run\'s writes, and edits made during the interruption',
+    /If an expected or tolerated write path overlaps dirty or pre-existing ignored user state,[\s\S]*?a whole-file hash alone is not sufficient/.test(c),
+    'overlapping user state cannot use a lone whole-file hash as preservation evidence',
   );
   assert.ok(
-    /Report that third group and treat it as the user's, never as this run's to overwrite/.test(c),
-    'edits made during an interruption belong to the user',
+    /Preserve the index and worktree layers separately with binary-capable base-to-index and index-to-worktree patches, or with the full staged blobs, exact index entries, and full worktree content and path state/.test(c),
+    'dirty overlaps retain separate comparable index and worktree evidence',
   );
   assert.ok(
-    /Record the acceptance fingerprint: the base commit plus every changed path and its content hash/.test(c),
-    'acceptance records a fingerprint a later session can revalidate',
+    /Do not write either run artifact before the normal gate; immediately after approval, persist and hash-check all baseline evidence before any task becomes `in-flight`/.test(c),
+    'durable overlap evidence lands after confirmation but before dispatch',
+  );
+  assert.ok(
+    /For every touched dirty-overlap path,[\s\S]*?compare the base-commit state, saved pre-run index and worktree patches or full snapshots, and post-task index and worktree states after the task returns/.test(c),
+    'dirty-overlap staged and unstaged preservation is checked after task execution',
+  );
+  assert.ok(
+    /If the comparison shows loss, or cannot prove preservation,[\s\S]*?mark the task `failed` for preservation ambiguity[\s\S]*?pause before dispatching dependents/.test(c),
+    'inconclusive overlap preservation fails closed without overwriting the worktree',
+  );
+  assert.ok(
+    /Update a task to `done` or `failed` only in the same ledger write that records its compact result, actual touched paths, and output fingerprints/.test(c),
+    'done and failed transitions atomically record output fingerprints',
+  );
+  assert.ok(
+    /A failed task can leave partial output, so `failed` requires the same evidence as `done`/.test(c),
+    'failed tasks retain fingerprints for partial output',
+  );
+  assert.ok(
+    /Matching the most recent terminal `done` or `failed` fingerprint proves only that the task-end state is unchanged[\s\S]*?never transfers ownership of pre-run dirty content/.test(c),
+    'a matching terminal checkpoint proves unchanged output without erasing user ownership',
+  );
+  assert.ok(
+    /whose latest task-output fingerprint no longer matches,[\s\S]*?is a user change or ambiguity[\s\S]*?never as this run's to overwrite/.test(c),
+    'post-completion edits are protected as user changes or ambiguities',
+  );
+  assert.ok(
+    /Acceptance fingerprint: <current confirmed base commit; ignored-path coverage state; exact sorted path set from Git-different, expected, tolerated, and actual-touched paths; each path's path-state fingerprint/.test(c),
+    'acceptance binds the base, coverage state, and an exact status-aware workspace path set',
+  );
+  assert.ok(
+    /persist an acceptance-command checkpoint in the ledger[\s\S]*?In the same next ledger write, record the command's exit result and compact output evidence, actual touched paths, terminal fingerprints, and overlap result/.test(c),
+    'project commands also use durable before-and-after checkpoints',
+  );
+});
+
+test('skill-behavior: xsk-execute-plan: result reuse is bound to reproducible identities', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  assert.ok(
+    /Record the input identity as `xsk-execute-plan-input-v1:sha256:<64 lowercase hexadecimal characters>`/.test(c),
+    'the input identity has one versioned, explicit format',
+  );
+  assert.ok(
+    /hash that file with the platform's SHA-256 utility \(`shasum -a 256` or `sha256sum`\)/.test(c),
+    'the identity names the tool that computes it rather than assuming a hash can be written by hand',
+  );
+  assert.ok(
+    /A hash written from inspection is a fabricated identity, and a fabricated identity is worse than none/.test(c),
+    'fabricating a digest is called out as worse than omitting one',
+  );
+  assert.ok(
+    /When no SHA-256 utility is available, record `xsk-execute-plan-input-v1:text` instead and store the source, goal, and complete input text verbatim/.test(c),
+    'a verbatim-text fallback keeps the identity checkable without a hash tool',
+  );
+  assert.ok(/A missing or unrecognized scheme is an identity failure/.test(c), 'unsupported identity formats fail closed');
+  assert.ok(
+    /compare exactly two identities, both recomputed from material that still exists/.test(c),
+    'reuse compares only identities that can actually be reproduced',
+  );
+  assert.ok(
+    /Do not ask the run to re-derive the old execution envelope and match it: a fresh decomposition of the same plan will not reproduce the recorded task definitions verbatim/.test(c),
+    'reuse does not depend on reproducing a past decomposition verbatim',
+  );
+  assert.ok(
+    /would only dress a blanket refusal as a check/.test(c),
+    'an unsatisfiable comparison is rejected as fake rigor rather than kept',
+  );
+  assert.ok(
+    /Only when both identities match may reuse without dispatch be offered alongside a new run/.test(c),
+    'reuse needs the input identity and the workspace fingerprint to match',
+  );
+  assert.ok(
+    /Any functional or UI fix attempt adds a full task definition and dependency to the final ordered task list/.test(c),
+    'fix tasks join the effective task list',
+  );
+  assert.ok(
+    /so `## Result` describes the effective tasks, acceptance criteria, and envelope that actually produced the result rather than the ones first confirmed/.test(c),
+    'the accepted result describes the effective specification',
+  );
+  assert.ok(
+    /A later comparison must match the exact path set as well as every entry; an added or missing path is a mismatch/.test(c),
+    'workspace revalidation compares both path membership and path state',
+  );
+  assert.ok(
+    /Exclude Git metadata and this run's ledger and companion baseline artifacts to avoid a self-referential fingerprint, but include `\.xsk\/\.gitignore` when changed/.test(c),
+    'the acceptance fingerprint excludes its own run artifacts without hiding the gitignore change',
   );
 });
 
@@ -527,6 +682,14 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
   assert.ok(
     /actual touched paths/.test(c) && /confirmed allowed paths/.test(c),
     'records actual paths and compares them with confirmed allowed paths',
+  );
+  assert.ok(
+    /independently derive every detectable actual touched path from the base, attempt-start records, current Git state, ignored-state comparison, and the subagent report,[\s\S]*?reconcile these sources rather than trusting the report alone/.test(c),
+    'the main workflow independently checks the subagent touched-path report',
+  );
+  assert.ok(
+    /Before every dispatch, compare the complete footprint with its latest trusted pre-run baseline or terminal task checkpoint[\s\S]*?Any mismatch since that checkpoint is new user work or ambiguity/.test(c),
+    'new user edits between tasks are protected before the next dispatch',
   );
   assert.ok(
     /A task's write footprint is its expected write paths together with its tolerated side-effect paths/.test(c),
@@ -550,12 +713,40 @@ test('skill-behavior: xsk-execute-plan: shared-workspace envelope detects scope 
     'both drift outcomes are defined',
   );
   assert.ok(
-    /That question is an exception check against the confirmed envelope, not the per-task review this skill omits/.test(c),
-    'the drift question does not reintroduce per-task review',
+    /That question is an exception check against the confirmed envelope, not the per-task code review this skill omits/.test(c),
+    'the drift question does not reintroduce per-task code review',
   );
   assert.ok(
-    /self-contained prompt containing the applicable hard rules[\s\S]*?allowed and expected write paths[\s\S]*?explicit prohibition on remote, external, destructive, or irreversible actions/.test(c),
-    'subagent prompts carry hard rules, path boundaries, and action prohibitions',
+    /cover every ignored path that falls inside a declared task or verification-command footprint, plus any additional ignored root the user names at the gate/.test(c),
+    'the ignored baseline is scoped to footprints plus user-named roots',
+  );
+  assert.ok(
+    /A workspace-wide walk is not required and is rarely affordable[\s\S]*?would make the skill unusable in exactly the repositories it targets/.test(c),
+    'a whole-workspace ignored walk is rejected as unaffordable in real repositories',
+  );
+  assert.ok(
+    /Record `Ignored-path coverage: complete` when every in-scope root is represented/.test(c),
+    'coverage is judged against the declared scope, not the whole workspace',
+  );
+  assert.ok(
+    /rescan the in-scope ignored roots[\s\S]*?changed existing ignored descendant or a newly created ignored path under those roots[\s\S]*?even when the subagent omitted it/.test(c),
+    'ignored writes omitted from a task report are independently detected within scope',
+  );
+  assert.ok(
+    /If coverage is incomplete, record the ambiguity and the affected paths, mark the acceptance criteria that depended on them `skipped` with that reason, and report it prominently/.test(c),
+    'incomplete ignored coverage degrades the affected criteria instead of blocking the run',
+  );
+  assert.ok(
+    /Incomplete coverage never passes as verified and is carried into the acceptance fingerprint, where a later comparison treats it as non-matching/.test(c),
+    'incomplete coverage still cannot masquerade as verified or as reusable proof',
+  );
+  assert.ok(
+    /self-contained prompt containing the applicable hard rules[\s\S]*?allowed and expected write paths[\s\S]*?default prohibition on dependency introduction, remote or external actions, destructive or irreversible actions, and platform permission prompts/.test(c),
+    'subagent prompts carry hard rules, path boundaries, and default action prohibitions',
+  );
+  assert.ok(
+    /When a task has a granted exception recorded in the envelope, copy its exact action, target, scope, limits, and permitted attempts into that task's prompt as the sole exception[\s\S]*?Keep the prohibition for everything else/.test(c),
+    'subagent prompts carry only the exact focused authorization exception',
   );
 });
 
@@ -571,6 +762,22 @@ test('skill-behavior: xsk-execute-plan: one normal gate preserves exceptional au
     'exceptional actions require focused authorization',
   );
   assert.ok(
+    /record each granted exception in the execution envelope with its exact action, target, assigned task, scope, limits, and permitted attempts/.test(c),
+    'focused authorization is recorded as exact task-scoped terms',
+  );
+  assert.ok(
+    /does not carry to another task, retry, verifier, or fix task unless the recorded terms explicitly include it/.test(c),
+    'authorization does not silently transfer to retries or fix tasks',
+  );
+  assert.ok(
+    /Exceptional actions and authorizations: <action, target, assigned task, scope, limits, permitted attempts, and pending or granted status, or none>/.test(c),
+    'the ledger durably records exceptional authorization status and terms',
+  );
+  assert.ok(
+    /If the exact exception cannot be passed to the assigned task, do not dispatch it/.test(c),
+    'an authorized action without a faithful delegated prompt has no fallback path',
+  );
+  assert.ok(
     /A newly discovered decision that changes implementation also returns to the user/.test(c),
     'new implementation decisions return to the user',
   );
@@ -578,44 +785,65 @@ test('skill-behavior: xsk-execute-plan: one normal gate preserves exceptional au
 
 test('skill-behavior: xsk-execute-plan: fresh verifier owns unified functional acceptance', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
+  const commandIndex = c.indexOf("First run the project's own verification commands");
+  const verifierIndex = c.indexOf('Only after the project commands and all of their writes have been reconciled, dispatch a fresh verifier');
   assert.ok(
-    /First dispatch a fresh verifier that did not implement any task/.test(c),
-    'unified acceptance uses a fresh non-implementing verifier',
+    commandIndex >= 0 && verifierIndex >= 0 && commandIndex < verifierIndex,
+    'project commands and their writes are reconciled before the fresh verifier',
   );
   assert.ok(
-    /confirmed goal, acceptance criteria, execution envelope, pre-existing dirty-path baseline, actual touched paths, and actual diff/.test(c),
-    'verifier receives the goal, criteria, scope baseline, paths, and diff',
+    /For every verification command, also name its own expected and tolerated write footprint, including snapshots, generated files, and formatter output/.test(c),
+    'verification-command writes are declared in the confirmed envelope',
   );
   assert.ok(
-    /checks the implementation against the goal and criteria, verifies scope and leftovers, and returns evidence without modifying files/.test(c),
-    'verifier checks intent and scope without editing',
+    /Immediately before each command, persist an acceptance-command checkpoint in the ledger[\s\S]*?After each command returns, derive and fingerprint every detectable write[\s\S]*?Reconcile those writes through the same allowed-path, scope-drift, dirty-overlap preservation, and ignored-coverage rules as a task/.test(c),
+    'command-induced writes receive durable checkpoints and full scope checks',
   );
   assert.ok(
-    /Then run the project's own verification commands \(tests, lint, build\)/.test(c),
-    'fresh verification is followed by project-native checks',
+    /confirmed goal, acceptance criteria, execution envelope, current confirmed base commit, pre-existing dirty-path fingerprints, in-scope ignored-state baseline and post-command scan,[\s\S]*?terminal task-output and acceptance-command fingerprints, actual touched paths, command output evidence, and the post-command actual diff/.test(c),
+    'verifier receives the post-command envelope, baselines, checkpoints, paths, and diff',
   );
   assert.ok(
-    /A verifier mismatch or command failure is reported as a functional failure/.test(c),
+    /independently proves that every dirty-overlap staged and unstaged user change survived, verifies scope and leftovers, and returns evidence without modifying files/.test(c),
+    'verifier checks user-change preservation and scope without editing',
+  );
+  assert.ok(
+    /Missing or inconclusive overlap evidence is a functional failure, not a pass inferred from hashes or status labels/.test(c),
+    'fresh verification cannot infer overlap preservation',
+  );
+  assert.ok(
+    /Incomplete ignored-path coverage is not a failure by itself: it marks the criteria that depended on it `skipped`, is recorded in the fingerprint, and can never be reported as a pass/.test(c),
+    'incomplete coverage degrades to skipped instead of blocking every run',
+  );
+  assert.ok(
+    /A verifier mismatch or command failure is also reported as a functional failure/.test(c),
     'verifier and command failures both affect functional acceptance',
   );
   assert.ok(
-    /at most one bounded fix attempt for unified functional acceptance[\s\S]*?repeat the fresh-verifier check and project commands once/.test(c),
+    /at most one bounded fix attempt for unified functional acceptance[\s\S]*?rerun the project commands, reconcile their writes, and repeat the fresh-verifier check once in that order/.test(c),
     'functional fixes are bounded and fully reverified',
   );
   assert.ok(
-    /Dispatch that fix as its own write-ahead ledger task under the full step 5 contract: allowed paths, the drift comparison, and the same prohibition on external, destructive, and irreversible actions/.test(c),
+    /Dispatch that fix as its own write-ahead ledger task under the full step 5 contract: allowed paths, the drift comparison, overlap preservation, terminal output fingerprints, and the same scoped-authority contract, copying only an exact granted exception assigned to that fix task and prohibiting everything else/.test(c),
     'the functional fix attempt inherits the full task contract and is tracked in the ledger',
   );
-  assert.ok(/Between tasks there is no review and no acceptance run/.test(c), 'still has no per-task review');
+  assert.ok(
+    /Between tasks there is no code review and no acceptance run[\s\S]*?produced by tools rather than by reading file contents, and it judges nothing about the implementation until unified acceptance/.test(c),
+    'per-task bookkeeping is tool-produced evidence, not a review',
+  );
   assert.ok(/warning-level, never a gate/.test(c), 'UI fidelity remains advisory');
   assert.ok(/at most 2 rounds by default/.test(c), 'UI fixes remain bounded');
   assert.ok(
-    /Every UI fix round is dispatched as its own write-ahead ledger task under the full step 5 contract too: allowed paths, the drift comparison, and the same authority prohibitions/.test(c),
+    /Every UI fix round is dispatched as its own write-ahead ledger task under the full step 5 contract too: allowed paths, the drift comparison, and the same scoped-authority contract, copying only an exact granted exception assigned to that UI fix task and prohibiting everything else/.test(c),
     'UI fix rounds inherit the same contract instead of only the file-set rule',
   );
   assert.ok(
-    /After any UI fix that changed files, the functional revalidation includes a fresh verifier/.test(c),
-    'post-UI revalidation repeats the fresh verifier',
+    /After any UI fix that changed files, the functional revalidation follows the same project-commands, write-reconciliation, then fresh-verifier order/.test(c),
+    'post-UI revalidation verifies the resulting post-command workspace',
+  );
+  assert.ok(
+    /Produce an acceptance fingerprint only when the latest functional acceptance passed, all scope-verification evidence is conclusive, and the final status is `done`[\s\S]*?Otherwise write `Acceptance fingerprint: not produced`/.test(c),
+    'reusable proof is produced only for a fully verified done workspace',
   );
 });
 
