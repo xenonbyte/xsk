@@ -367,17 +367,21 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
 //
 // The byte budgets are a product decision: this skill once reached 50757 bytes
 // of forensic protocol, which is worse than useless in a skill whose job is to
-// be cheap to load. Changing one is the same kind of decision, not a
-// convenience, and belongs in a commit that says what it buys or gives up.
+// be cheap to load. Raising one is the same kind of decision, not a convenience
+// value, and it belongs with a delivery note saying what the bytes bought or
+// gave up.
 //
-// The packed cap is back at its original 12000. The behavior cap is 9000 rather
-// than its original 8500, and the 500 is accounted for rather than waved
-// through: 8500 was set against a document that still had the UI fidelity tier
-// and had not yet absorbed four rounds of correctness fixes. Those fixes cost
-// about 1450 bytes, removing the UI tier gave back about 970, and the residual
-// is what the cap now covers. The two numbers describe different documents.
-const EXECUTE_PLAN_PACKED_MAX = 12000;
-const EXECUTE_PLAN_BEHAVIOR_MAX = 9000;
+// The packed cap was once restored to 12000 on purpose. These caps leave that
+// number just as deliberately, and cover a measured 1161 bytes. What those
+// bytes buy: the tracked diff and the untracked file contents no longer travel
+// through the main conversation; an implementer result counts only the final
+// task-acceptance checks run after the task's last write; the reviewer has a
+// full clean or concern return protocol; and the one bounded fix can fetch its
+// own command diagnostics, with its single-use allowance recorded where the
+// recoverable state machine can still read it. Each cap rounds up to the next
+// hundred, which leaves room for a typo fix and not for a new mechanism.
+const EXECUTE_PLAN_PACKED_MAX = 13200;
+const EXECUTE_PLAN_BEHAVIOR_MAX = 10200;
 
 test('skill-behavior: xsk-execute-plan: invocation and admission', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
@@ -448,6 +452,38 @@ test('skill-behavior: xsk-execute-plan: gate, ledger, and dispatch', () => {
     'a failed task ends the run and blocks its dependents',
   );
   assert.ok(/Between tasks there is no code review and no acceptance run/.test(c), 'no per-task review');
+  assert.ok(
+    /Require nothing else back: no diff, no file contents, no task restatement/.test(c),
+    'the implementer return is bounded below file contents',
+  );
+  assert.ok(
+    /For each task-acceptance check, report its final run after the task's last write and exit result/.test(c),
+    'only the final run of each acceptance check, taken after the last write, counts',
+  );
+  assert.ok(
+    /or `not run` and why/.test(c),
+    'a check that was not run is reported as such, with a reason',
+  );
+  assert.ok(
+    /an omitted check becomes `not run: not reported`/.test(c),
+    'an unreported check is marked rather than silently dropped',
+  );
+  assert.ok(
+    /any failed final check[\s\S]*?makes the task `failed`/.test(c),
+    'a failing final check fails the task',
+  );
+  assert.ok(
+    /missing or malformed task result makes the task `failed`/.test(c),
+    'an unusable task result fails the task instead of passing as done',
+  );
+  assert.ok(
+    /Otherwise write `done` and keep the check evidence for step 7/.test(c),
+    'the remaining returns write `done` and carry their check evidence to the report',
+  );
+  assert.ok(
+    /for step 5's bounded fix/.test(c),
+    'the ledger write boundary admits the one bounded fix',
+  );
 });
 
 test('skill-behavior: xsk-execute-plan: acceptance, recovery, and reporting', () => {
@@ -457,11 +493,11 @@ test('skill-behavior: xsk-execute-plan: acceptance, recovery, and reporting', ()
     'acceptance uses an independent, non-writing reviewer',
   );
   assert.ok(
-    /telling it to read the untracked paths directly, since a plain diff omits them and a whole new source file would otherwise never reach review/.test(c),
+    /read the untracked paths directly, since a plain diff omits them and a whole new source file would otherwise never reach review/.test(c),
     'review material covers the paths a plain diff hides',
   );
   assert.ok(
-    /Allow at most one bounded fix as an ordinary serial task, then rerun the commands and the reviewer once; never loop/.test(c),
+    /Allow at most one bounded fix[\s\S]*?Only a `done` fix reruns all commands and the reviewer once; never loop/.test(c),
     'fixes are bounded and fully revalidated',
   );
   assert.ok(
@@ -493,6 +529,50 @@ test('skill-behavior: xsk-execute-plan: acceptance, recovery, and reporting', ()
     'the report carries a fixed line naming what was not checked',
   );
   assert.ok(/Do not commit, push, or publish unless the user asks/.test(c), 'stops without committing');
+  assert.ok(
+    /diff against `base` itself/.test(c),
+    'the reviewer takes the tracked diff itself instead of being handed one',
+  );
+  assert.ok(
+    !/the diff against `base`/.test(c),
+    'no diff body is relayed through this conversation',
+  );
+  assert.ok(
+    /Require exactly `no concerns` when clean/.test(c),
+    'a clean review has one exact wording',
+  );
+  assert.ok(
+    /each naming what is wrong and identifying one or more affected paths or an acceptance criterion, without quoting file contents/.test(c),
+    'a concern names the fault and where it lands without quoting file contents',
+  );
+  assert.ok(
+    /Empty or malformed review makes acceptance `failed`; dispatch no fix/.test(c),
+    'an unusable review fails acceptance and dispatches no fix',
+  );
+  assert.ok(
+    /A valid concern or command failure is a functional failure/.test(c),
+    'only a valid concern or a failing command counts as a functional failure',
+  );
+  assert.ok(
+    /only inside the confirmed envelope; otherwise set the run to `failed` without dispatch/.test(c),
+    'a fix never widens the confirmed envelope',
+  );
+  assert.ok(
+    /Append it to the ledger as the run's one fix/.test(c),
+    'the one-fix allowance is recorded on the ledger, so recovery can read it',
+  );
+  assert.ok(
+    /an ordinary serial task under every step 4 rule/.test(c),
+    'the fix inherits every step 4 task rule',
+  );
+  assert.ok(
+    /each failing command with its exit result, but no command output; it re-reads code and reruns them for diagnostics/.test(c),
+    'the fixer gets commands and exit results, then reruns them for its own diagnostics',
+  );
+  assert.ok(
+    /A failed fix goes to step 7/.test(c),
+    'a failed fix ends the run instead of buying another pass',
+  );
 });
 
 test('skill-behavior: xsk-execute-plan: stays inside its byte budget', () => {
