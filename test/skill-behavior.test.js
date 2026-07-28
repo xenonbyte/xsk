@@ -371,17 +371,15 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
 // value, and it belongs with a delivery note saying what the bytes bought or
 // gave up.
 //
-// The packed cap was once restored to 12000 on purpose. These caps leave that
-// number just as deliberately, and cover a measured 1161 bytes. What those
-// bytes buy: the tracked diff and the untracked file contents no longer travel
-// through the main conversation; an implementer result counts only the final
-// task-acceptance checks run after the task's last write; the reviewer has a
-// full clean or concern return protocol; and the one bounded fix can fetch its
-// own command diagnostics, with its single-use allowance recorded where the
-// recoverable state machine can still read it. Each cap rounds up to the next
-// hundred, which leaves room for a typo fix and not for a new mechanism.
-const EXECUTE_PLAN_PACKED_MAX = 13200;
-const EXECUTE_PLAN_BEHAVIOR_MAX = 10200;
+// These caps deliberately rose from 13200/10200. The added bytes buy five
+// safety guarantees: recovery refreshes repository rules; the runs ignore
+// lands before the ledger; acceptance can persist interruptions; every
+// verification command and post-fix rerun gets an immediate invariant check;
+// and worktree exclusivity stays explicitly unverified. Each cap rounds the
+// measured size up to the next hundred, leaving room for a typo fix and not a
+// new mechanism.
+const EXECUTE_PLAN_PACKED_MAX = 14100;
+const EXECUTE_PLAN_BEHAVIOR_MAX = 11000;
 
 test('skill-behavior: xsk-execute-plan: invocation and admission', () => {
   const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
@@ -432,12 +430,24 @@ test('skill-behavior: xsk-execute-plan: gate, ledger, and dispatch', () => {
     'exclusive use of the worktree is declared by the user, never reported as verified',
   );
   assert.ok(
+    /Invariant checks catch only observable out-of-envelope changes; they cannot detect another writer editing a path already inside the allowed set, so exclusive worktree use remains an unverified premise throughout/.test(c),
+    'scope checks do not turn the exclusivity premise into a verified claim',
+  );
+  assert.ok(
     /The ledger is a recovery log, not tamper-evident evidence and not a deliverable/.test(c),
     'the ledger claims recovery value only',
   );
   assert.ok(
     /declare it as an orchestration-owned path, since a path this skill writes without confirming would later read as scope drift against itself/.test(c),
     'the skill declares its own gitignore write instead of tripping on it',
+  );
+  assert.ok(
+    /first write the `\.xsk\/\.gitignore` change[\s\S]*?If this write fails, stop before creating the ledger\. Then write `\.xsk\/runs\/<slug>\.md`/.test(c),
+    'the runs ignore is installed before the ledger can become Git-visible',
+  );
+  assert.ok(
+    /At every invariant check in steps 4-6, a broken invariant always permits an immediate ledger write of `status: interrupted`, including during acceptance; write it before stopping/.test(c),
+    'every invariant check can persist an interruption before stopping',
   );
   assert.ok(
     /Per task, check the run-wide invariants twice: before writing `in-flight`, and again when the subagent returns/.test(c),
@@ -505,12 +515,20 @@ test('skill-behavior: xsk-execute-plan: acceptance, recovery, and reporting', ()
     'a run with no gates never looks verified',
   );
   assert.ok(
+    /Immediately after each command, before running the next, re-check the invariants[\s\S]*?Apply the same per-command check to every post-fix rerun/.test(c),
+    'every verification command and post-fix rerun is followed immediately by an invariant check',
+  );
+  assert.ok(
     /Route on status first\. A `done`, `failed`, or `interrupted` ledger is history[\s\S]*?Only a `running` ledger, left by a session that ended mid-run, is resumable/.test(c),
     'every ledger state has exactly one recovery route',
   );
   assert.ok(
     /Starting over means retiring the ledger and re-entering step 1 for full admission and a fresh gate, never a shortcut from here/.test(c),
     'a rerun re-enters admission instead of overwriting the ledger in place',
+  );
+  assert.ok(
+    /Before any redispatch, repeat step 1's brief scan of `CLAUDE\.md`, `AGENTS\.md`, and repo rules\. The ledger does not preserve these constraints, so refresh the applicable hard rules in each pending-task prompt/.test(c),
+    'recovery refreshes repository hard rules before pending tasks are redispatched',
   );
   assert.ok(
     /Never re-dispatch it and never infer what it did: set the run to `interrupted` and stop/.test(c),
