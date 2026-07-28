@@ -1,0 +1,20 @@
+{
+  "version": "1.3.0",
+  "rules": [
+    {
+      "file": "guardrails-core.md",
+      "sourceVersion": "1.3.0",
+      "sha256": "140a64fd8446660082ec7419ae6b33b64b864d479ea131093e8a7f73aa808084"
+    },
+    {
+      "file": "javascript.md",
+      "sourceVersion": "1.3.0",
+      "sha256": "f54d32bf57bd0b0a1b5cb716e282fdcdc5a93aff1052d13a226f3e484ec2d413"
+    }
+  ],
+  "lint": [],
+  "conventions": {
+    "sha256": "142e06b96dd0aac07a98b936593b7a3493d295865dcac83be0df1b9dea25f898",
+    "distilledAt": "2026-07-28T03:49:26.604Z"
+  }
+}

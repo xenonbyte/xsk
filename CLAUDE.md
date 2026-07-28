@@ -18,6 +18,8 @@ npm pack --dry-run                               # verify packaged file list (se
 
 There is no build step and no linter. The tests ARE the gate; the suite must be fully green before anything ships.
 
+Releasing (the shape every prior release used): bump `version` in `package.json` and commit that file alone as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push main and the tag, `npm publish`, then `gh release create`. History is linear, so merge feature branches with `--ff-only`. Breaking changes bump the minor while the package is 0.x. `npm publish` is irreversible: run `npm test`, `npm run syntaxcheck`, and `npm pack --dry-run` first, and do not publish, push, or tag unless the user asked for it.
+
 ## The generation pipeline (read this first)
 
 Packed skills are GENERATED, not hand-written. The committed `skills/<base>/SKILL.md` files and their golden fixtures are build outputs kept byte-for-byte in sync with the generator. Editing them directly will pass locally but fail `test/golden.test.js`.
@@ -27,6 +29,8 @@ Flow:
 - `templates/fragments/<base>.{purpose,triggers,behavior,output}.md` hold the per-skill prose, one file per section.
 - `lib/generator.js` `buildSkill(skill)` fills `templates/skill.md.tmpl` with those four sections plus the shared body `shared/skill-common.md`, producing the packed `SKILL.md` content.
 - `test/fixtures/golden/<name>.md` is the "masked shell": the packed content with the trimmed `shared/skill-common.md` body replaced by the literal `<SHARED_MASKED>` sentinel (so the golden tracks per-skill shape, not the shared body).
+
+Which tests go red when tells you what you forgot. `body()` in `test/skill-behavior.test.js` calls `buildSkill()` at run time, so every content assertion flips the instant you edit a fragment, regenerated or not. Only the two `golden:` cases compare against the files on disk. So: content assertions red = your fragment edit and the assertions disagree; `golden:` red alone = the fragment is fine and you just have not regenerated yet.
 
 To change a skill, edit the fragment(s) and/or the `lib/skills.js` entry, then regenerate BOTH the packed skill and its golden:
 
@@ -71,9 +75,22 @@ Safety invariants that span these files:
 
 ## Project conventions enforced by tests
 
-- No em-dash (U+2014) or en-dash (U+2013) in generated skill content (`test/generator.test.js`). By convention the repo avoids them in docs too; use ASCII hyphen, colon, or comma.
+- No em-dash (U+2014) or en-dash (U+2013). Applied project-wide by convention, but the only automated check is scoped to ONE skill: the assertions live inside `test/generator.test.js`'s `xsk-write-req` test, and the all-skills loops there check Waza scripts and relative paths, not dashes. A dash added to any other skill's fragment ships green. Scan the added lines yourself (`git diff` `+` lines, not whole files: `test/skill-behavior.test.js` legitimately holds pre-existing em-dashes). Use ASCII hyphen, colon, or comma.
 - `README.md` and `README.zh-CN.md` must have byte-identical heading lines, in order (`test/baseline.test.js`, `test/readme-pinning.test.js`, `test/self-conformance.test.js`). Edit both in lockstep; the CN README keeps English headings and certain English literals (commands, paths, `npm test`).
 - `xsk` is itself an agent-skill project and self-conforms to the `xsk-skill-scaffold` standard (`test/self-conformance.test.js`): the packed file list, README parity, and required modules are all asserted.
+
+## Skills reference each other, and the names are load-bearing
+
+The fragments form a handoff graph, so a skill is not editable in isolation: `think` routes to `xsk-execute-plan` and `xsk-write-req`; `execute-plan` names `xsk-think` as an accepted input and as a selection source; `consume-point` hands off to `xsk-write-req` and archives `xsk-point` docs; `point` names `xsk-think`. Renaming or removing a skill means fixing every fragment that names it. `test/skill-behavior.test.js` asserts these handoff strings, so a missed one fails rather than silently producing a skill that points at nothing.
+
+`xsk-think` never invokes an executor: it presents choices and stops. `xsk-execute-plan` is explicit-invocation-only and does not self-trigger on execution intent, a deliberate local rule so it cannot collide with a harness's own plan or execution modes. Do not "helpfully" make either one auto-chain.
+
+## `xsk-execute-plan` carries two guards no other skill has
+
+Both live in `test/skill-behavior.test.js`:
+
+- **A byte budget.** `EXECUTE_PLAN_PACKED_MAX` and `EXECUTE_PLAN_BEHAVIOR_MAX` cap the packed skill and its behavior fragment in UTF-8 bytes, because a skill whose job is to be cheap to load once reached 50757 bytes. Going over is a real signal: drop a guarantee, or raise the cap as a deliberate product decision and say in the delivery what the bytes bought. Never raise a cap just to get green. The comment above the constants records the current reasoning; keep it truthful when you change them.
+- **A retired-mechanism blacklist.** A list of removed mechanism names (`anchor-v1`, `JCS`, `acceptance fingerprint`, `reconciled HEAD`, and others) that must not reappear, plus a ban on after-the-fact attribution language. This skill was deliberately rebuilt from an audit system into an orchestrator; the blacklist stops the audit machinery from creeping back. Do not edit the list to accommodate new prose.
 
 ## Skill runtime stores
 
@@ -82,3 +99,11 @@ Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-po
 ## Not part of xsk (do not confuse for source)
 
 `.req-to-plan/` is the r2p (req-to-plan) workflow tool and `.drfx/` is a separate review/fix tool. Neither is xsk source, neither ships in the package (both excluded by the `files` field), and `.xsk/` here is this repo's own use of the skills' runtime store, not `lib/` code. `.drfx/` is gitignored; `.req-to-plan/` tracks only its own `.gitignore`.
+
+<!-- code-guidelines:begin -->
+Maintained by /code-guidelines. Do not edit between these markers.
+Progressive-disclosure rule pointers:
+- Before any edits, read `.code-guidelines/project-conventions.md` (project conventions).
+- Before editing `**/*`, read `.code-guidelines/guardrails-core.md`.
+- Before editing `**/*.js`, `**/*.mjs`, `**/*.cjs`, read `.code-guidelines/javascript.md`.
+<!-- code-guidelines:end -->

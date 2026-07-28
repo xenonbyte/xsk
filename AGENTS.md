@@ -9,6 +9,8 @@
 
 No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before claiming done.
 
+Release shape (identical across every prior release): bump `version` in `package.json`, commit that file alone as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push main + tag, `npm publish`, `gh release create`. History is linear - merge feature branches `--ff-only`. Breaking changes bump the minor while 0.x. `npm publish` is irreversible; gate it on `npm test` + `npm run syntaxcheck` + `npm pack --dry-run`, and never publish/push/tag unless the user asked.
+
 ## Skills
 9 skills registered in `lib/skills.js` (shape `{ name, description, platforms, fragmentBase }`; `ALL_PLATFORMS = ['claude','codex','opencode','gemini']`): `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-check`, `xsk-execute-plan`. `xsk-bypass-claude` is Claude-only (`platforms: ['claude']`); the other 8 target all 4 platforms.
 
@@ -30,9 +32,22 @@ No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before
   ```
 - Adding a new skill = new registry entry + four new fragments + regenerate packed + golden, then sync every site that hardcodes the skill set: `test/generator.test.js` (count in title + sorted names list), `test/install.test.js` (per-platform count assertions + title; claude=N, non-claude platforms=N-1 since `xsk-bypass-claude` is claude-only), `test/self-conformance.test.js` (packed-file list), `test/skill-behavior.test.js` (per-skill block); a table row + the body count phrases in both READMEs; this file's header count and `## Skills` list; CLAUDE.md's `Skill runtime stores` section and the `.xsk/` line under `Skill content rules` below when the skill touches `.xsk/`. `npm test` guards the test-file + README-parity edits; the README and this file's counts have NO test - eyeball them.
 
+## Which test goes red tells you what you forgot
+`body()` in `test/skill-behavior.test.js` calls `buildSkill()` at run time, so every content assertion flips the instant a fragment changes, regenerated or not; only the two `golden:` cases compare against on-disk files. Content assertions red = fragment and assertions disagree. `golden:` red alone = fragment is fine, you just have not regenerated.
+
+## Skill handoff graph - names are load-bearing
+Fragments reference each other, so no skill is editable in isolation: `think` -> `xsk-execute-plan`, `xsk-write-req`; `execute-plan` -> `xsk-think` (accepted input + selection source); `consume-point` -> `xsk-point`, `xsk-write-req`; `point` -> `xsk-think`. Renaming or removing a skill means fixing every fragment naming it; `test/skill-behavior.test.js` asserts the handoff strings, so a miss fails instead of shipping a dangling pointer.
+
+`xsk-think` never invokes an executor - it presents choices and stops. `xsk-execute-plan` is explicit-invocation-only and never self-triggers on execution intent (deliberate local rule, so it cannot collide with a harness's own plan/execution modes). Do not make either auto-chain.
+
+## `xsk-execute-plan` - two guards no other skill has
+Both in `test/skill-behavior.test.js`:
+- **Byte budget.** `EXECUTE_PLAN_PACKED_MAX` / `EXECUTE_PLAN_BEHAVIOR_MAX` cap packed skill + behavior fragment in UTF-8 bytes; this skill once reached 50757 bytes and its job is to be cheap to load. Over budget is a real signal: drop a guarantee, or raise the cap deliberately and state in the delivery what the bytes bought. Never raise a cap just to get green; keep the reasoning comment above the constants truthful.
+- **Retired-mechanism blacklist.** Removed mechanism names (`anchor-v1`, `JCS`, `acceptance fingerprint`, `reconciled HEAD`, ...) must not reappear, plus a ban on after-the-fact attribution language. The skill was deliberately rebuilt from an audit system into an orchestrator; this stops the audit machinery creeping back. Do not edit the list to accommodate new prose.
+
 ## Skill content rules
 - English. Triggers are multilingual cues, not exact-match incantations.
-- No em-dash (U+2014) or en-dash (U+2013) - enforced for `xsk-write-req`, applied project-wide. Use ASCII hyphen, colon, or comma. No AI-formulaic filler (banned-phrase list pinned in `test/skill-behavior.test.js`).
+- No em-dash (U+2014) or en-dash (U+2013) - applied project-wide, but the ONLY automated check is scoped to `xsk-write-req` (assertions sit inside that test in `test/generator.test.js`; the all-skills loops there check Waza scripts and relative paths, not dashes). A dash in any other fragment ships green - scan your own added lines (`git diff` `+` lines, not whole files: `test/skill-behavior.test.js` legitimately holds pre-existing em-dashes). Use ASCII hyphen, colon, or comma. No AI-formulaic filler (banned-phrase list pinned in `test/skill-behavior.test.js`).
 - Generated frontmatter is `name` + `description` only. Never add `when_to_use`/`dispatch_intent` as required fields (opencode ignores them - alias-collision rule).
 - `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan` describe reading/writing a project's `.xsk/` dir (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, `.xsk/.gitignore`). That is documented skill behavior living in the fragments, NOT runtime code in `lib/`; `lib/` never touches those paths.
 
@@ -62,3 +77,11 @@ Install/uninstall/status/doctor tests must NEVER touch real `~/.claude`, `~/.age
 ## Not part of xsk - external tooling, do not confuse
 - `.req-to-plan/` - r2p (req-to-plan) workflow tool. `.drfx/` - a separate review/fix tool. Neither ships in the package (excluded by the `files` field) and neither is xsk source. `.drfx/` is gitignored; `.req-to-plan/` tracks only its own `.gitignore` (its `archive/` and `.workflow-active` are gitignored).
 - After executing an r2p plan, archive the run with `~/.req-to-plan/bin/r2p-archive --work-id <id>` - it moves the WF dir to `.req-to-plan/archive/` (gitignored) and auto-commits the removal. The `r2p` binary and the installed `r2p` skill cover only install/status of the integration, not workflow advance.
+
+<!-- code-guidelines:begin -->
+Maintained by /code-guidelines. Do not edit between these markers.
+Progressive-disclosure rule pointers:
+- Before any edits, read `.code-guidelines/project-conventions.md` (project conventions).
+- Before editing `**/*`, read `.code-guidelines/guardrails-core.md`.
+- Before editing `**/*.js`, `**/*.mjs`, `**/*.cjs`, read `.code-guidelines/javascript.md`.
+<!-- code-guidelines:end -->
