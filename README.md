@@ -1,20 +1,25 @@
+<div align="center">
+
 # xsk
+
+*Curate a small set of agent skills and install them across Claude Code, Codex, opencode, and Gemini, with manifest-backed safety*
+
+[![npm version](https://img.shields.io/npm/v/@xenonbyte/xsk?style=flat-square)](https://www.npmjs.com/package/@xenonbyte/xsk)
+[![Node](https://img.shields.io/badge/node->=20-3c873a?style=flat-square)](https://nodejs.org/)
+[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)](package.json)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Skills](#skills) • [How it works](#how-it-works) • [Safety](#safety)
 
 **English** | [简体中文](README.zh-CN.md)
 
-> Curate a small set of agent skills and install them across Claude Code, Codex, opencode, and Gemini, with manifest-backed safety.
+</div>
 
-[![Node](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json)
+Working across AI coding agents has two recurring frictions: third-party skill packs are all-or-nothing, and self-authored skills end up scattered with no shared install, manifest, or safety story.
 
-`xsk` (`@xenonbyte/xsk`) is a zero-dependency CLI that installs a curated set of agent skills into every supported AI coding agent, then tracks exactly what it created so uninstall removes only those files.
+`xsk` (`@xenonbyte/xsk`) solves both. It ships nine curated skills (two distilled from third parties, seven original) and a zero-dependency CLI that installs each one into every supported platform's skill directory, then records exactly what it created so `uninstall` removes only those files and nothing else.
 
-## Overview
-
-Working across AI coding agents has two recurring frictions: third-party skill packs are all-or-nothing, and self-authored skills are scattered with no shared install/manifest/safety story. `xsk` solves both. It ships nine curated skills (two distilled from third parties, seven original) and a CLI that installs each skill into every supported platform's skill directory, then records exactly what it created so uninstall removes only those files.
-
-`xsk` is itself an agent-skill project and conforms to the same standard its scaffold skill enforces.
+`xsk` is itself an agent-skill project and conforms to the same standard its own scaffold skill enforces.
 
 ## Features
 
@@ -23,7 +28,7 @@ Working across AI coding agents has two recurring frictions: third-party skill p
 - **Manifest-backed safety.** Owned-only removal, ownership markers, atomic writes, symlink refusal, and content-hash drift detection.
 - **Uninstall-first installs.** A reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed.
 - **User edits are never clobbered.** A modified owned file is refused and rolled back instead of being overwritten.
-- **Zero runtime dependencies.** Pure Node.js (>= 20), CommonJS.
+- **Zero runtime dependencies.** Pure Node.js (>= 20), CommonJS, no build step.
 
 ## Installation
 
@@ -45,6 +50,27 @@ xsk uninstall                     # remove only what xsk created
 xsk doctor                        # probe environment + manifest health
 xsk version
 xsk help
+```
+
+After `xsk install`, `xsk status` reports each platform independently:
+
+```
+claude: ok (9 skills) v0.2.0
+codex: ok (8 skills) v0.2.0
+opencode: ok (8 skills) v0.2.0
+gemini: ok (8 skills) v0.2.0
+```
+
+The non-Claude platforms show 8 because `xsk-bypass-claude` is Claude-only and is skipped there.
+
+`xsk doctor` checks the environment rather than the install, one line per probe:
+
+```
+[PASS] Node >= 20 - running Node 24.8.0
+[PASS] ~/.xsk writable - writable or creatable
+[PASS] claude skill dir writable - writable or creatable
+[PASS] manifests valid - 4 manifest(s) valid
+doctor: all checks passed
 ```
 
 ## Commands
@@ -86,6 +112,14 @@ Nine skills, prefixed `xsk-`:
 - For large, high-risk, or cross-session work, create a durable requirement with `xsk-write-req` and use the project's full workflow before implementation.
 - For durable research, use the explicit `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` path. Each transition is user-selected; no skill chains automatically.
 - Use `xsk-check` to review an existing change or diff before merge. After an implementation is accepted, invoke `xsk-archive-req` explicitly to archive its active requirement.
+
+## How it works
+
+Skills are generated, not copied. Each one is a registry entry plus four prose fragments (purpose, triggers, behavior, output) that the generator renders into a single platform-neutral `SKILL.md` alongside a shared body. One source produces the same skill for all four platforms, so they cannot drift apart.
+
+Installing writes that `SKILL.md` into each selected platform's skill directory, drops a `.xsk-owned` marker beside it, and records every path it created in a per-platform manifest under `~/.xsk/`, along with a content hash of each file.
+
+That manifest is what makes the rest safe. `uninstall` removes only recorded paths that still carry a valid marker. `status` re-hashes each file and reports `drift` when one no longer matches what `xsk` wrote, which is how a user edit is detected and preserved rather than overwritten.
 
 ## Platforms
 
@@ -130,6 +164,8 @@ npm test            # full node:test suite
 npm run syntaxcheck # node --check every bin/, lib/, test/ file
 npm pack --dry-run  # verify package contents
 ```
+
+There is no build step and no linter: the test suite is the gate. Skills under `skills/` and their golden fixtures are generated output, so change the fragments in `templates/fragments/` and regenerate rather than editing them directly.
 
 ---
 

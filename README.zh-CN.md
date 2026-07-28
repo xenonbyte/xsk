@@ -1,18 +1,23 @@
+<div align="center">
+
 # xsk
+
+*精选一小组 agent skill，以 manifest 记录作为安全保障，安装到 Claude Code、Codex、opencode 与 Gemini*
+
+[![npm version](https://img.shields.io/npm/v/@xenonbyte/xsk?style=flat-square)](https://www.npmjs.com/package/@xenonbyte/xsk)
+[![Node](https://img.shields.io/badge/node->=20-3c873a?style=flat-square)](https://nodejs.org/)
+[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen?style=flat-square)](package.json)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+
+[Features](#features) • [Installation](#installation) • [Usage](#usage) • [Skills](#skills) • [How it works](#how-it-works) • [Safety](#safety)
 
 [English](README.md) | **简体中文**
 
-> 精选一小组 agent skill，以 manifest 记录作为安全保障，安装到 Claude Code、Codex、opencode 与 Gemini。
+</div>
 
-[![Node](https://img.shields.io/badge/node-%3E%3D20-3c873a)](https://nodejs.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json)
+跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处，缺少统一的安装、manifest 与安全方案。
 
-`xsk`（`@xenonbyte/xsk`）是一个零依赖 CLI，把一组精选的 agent skill 安装到每个受支持的 AI coding agent，并精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
-
-## Overview
-
-跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处、缺少统一的安装 / manifest / 安全方案。`xsk` 同时解决这两点。它内置九个精选 skill（两个从第三方蒸馏而来，七个原创），并提供一个 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，再精确记录它创建了哪些文件，使 uninstall 只移除这些文件。
+`xsk`（`@xenonbyte/xsk`）同时解决这两点。它内置九个精选 skill（两个从第三方蒸馏而来，七个原创），以及一个零依赖 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，并精确记录它创建了哪些文件，使 `uninstall` 只移除这些文件，绝不多删。
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
@@ -23,7 +28,7 @@
 - **manifest 为后盾的安全。** owned-only removal、ownership markers、atomic writes、symlink refusal，以及 content-hash 漂移检测。
 - **uninstall-first 安装。** 重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`。
 - **绝不覆盖用户改动。** 被改过的 owned 文件会被拒绝并回滚，而不会被覆盖。
-- **零运行时依赖。** 纯 Node.js（>= 20），CommonJS。
+- **零运行时依赖。** 纯 Node.js（>= 20），CommonJS，无构建步骤。
 
 ## Installation
 
@@ -45,6 +50,27 @@ xsk uninstall                     # 只移除 xsk 创建的内容
 xsk doctor                        # 探测环境与 manifest 健康状况
 xsk version
 xsk help
+```
+
+执行 `xsk install` 后，`xsk status` 会按平台分别报告：
+
+```
+claude: ok (9 skills) v0.2.0
+codex: ok (8 skills) v0.2.0
+opencode: ok (8 skills) v0.2.0
+gemini: ok (8 skills) v0.2.0
+```
+
+非 Claude 平台显示 8 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
+
+`xsk doctor` 检查的是环境而非安装结果，每项探测一行：
+
+```
+[PASS] Node >= 20 - running Node 24.8.0
+[PASS] ~/.xsk writable - writable or creatable
+[PASS] claude skill dir writable - writable or creatable
+[PASS] manifests valid - 4 manifest(s) valid
+doctor: all checks passed
 ```
 
 ## Commands
@@ -86,6 +112,14 @@ xsk help
 - 大型、高风险或跨会话工作应先用 `xsk-write-req` 建立 durable requirement，再进入项目的 full workflow 后实施。
 - 需要持久化研究时，显式采用 `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` 路径。每次转换都由用户选择，skill 不会自动串联。
 - 用 `xsk-check` 评审已有 change 或 diff，再合入。implementation 验收通过后，显式调用 `xsk-archive-req` 归档 active requirement。
+
+## How it works
+
+skill 是生成出来的，不是复制来的。每个 skill 由一条注册表条目加四份散文片段（purpose、triggers、behavior、output）构成，生成器把它们连同一份共享正文渲染成单一的、平台中立的 `SKILL.md`。同一份来源产出四个平台完全相同的 skill，因此它们不会各自漂移。
+
+安装时，这份 `SKILL.md` 被写入每个所选平台的 skill 目录，旁边放置一个 `.xsk-owned` 标记，并把创建的每个路径连同各文件的 content hash 记录进 `~/.xsk/` 下按平台划分的 manifest。
+
+其余的安全性都建立在这份 manifest 之上。`uninstall` 只移除记录在案且标记仍有效的路径。`status` 会重新计算各文件的哈希，一旦与 `xsk` 写入时不符就报告 `drift`：用户改动正是这样被识别并保留，而不是被覆盖。
 
 ## Platforms
 
@@ -130,6 +164,8 @@ npm test            # 完整 node:test 套件
 npm run syntaxcheck # 对 bin/、lib/、test/ 下每个文件执行 node --check
 npm pack --dry-run  # 校验 package 内容
 ```
+
+没有构建步骤，也没有 linter：测试套件就是门禁。`skills/` 下的 skill 与其 golden fixture 都是生成产物，请修改 `templates/fragments/` 中的片段后重新生成，而不要直接编辑它们。
 
 ---
 
