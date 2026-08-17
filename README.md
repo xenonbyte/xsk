@@ -55,10 +55,10 @@ xsk help
 After `xsk install`, `xsk status` reports each platform independently:
 
 ```
-claude: ok (8 skills) v0.2.0
-codex: ok (7 skills) v0.2.0
-opencode: ok (7 skills) v0.2.0
-gemini: ok (7 skills) v0.2.0
+claude: ok (8 skills) v0.3.0
+codex: ok (7 skills) v0.3.0
+opencode: ok (7 skills) v0.3.0
+gemini: ok (7 skills) v0.3.0
 ```
 
 The non-Claude platforms show 7 because `xsk-bypass-claude` is Claude-only and is skipped there.
@@ -72,6 +72,8 @@ The non-Claude platforms show 7 because `xsk-bypass-claude` is Claude-only and i
 [PASS] manifests valid - 4 manifest(s) valid
 doctor: all checks passed
 ```
+
+Installed skills belong to the agent, not to `xsk`: there is no `xsk run`. In Claude Code and opencode each one is directly invocable as `/xsk-<name>`, and every skill also states its own triggers, so an agent can pick it up from intent instead.
 
 ## Commands
 

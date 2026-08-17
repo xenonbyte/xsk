@@ -55,10 +55,10 @@ xsk help
 执行 `xsk install` 后，`xsk status` 会按平台分别报告：
 
 ```
-claude: ok (8 skills) v0.2.0
-codex: ok (7 skills) v0.2.0
-opencode: ok (7 skills) v0.2.0
-gemini: ok (7 skills) v0.2.0
+claude: ok (8 skills) v0.3.0
+codex: ok (7 skills) v0.3.0
+opencode: ok (7 skills) v0.3.0
+gemini: ok (7 skills) v0.3.0
 ```
 
 非 Claude 平台显示 7 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
@@ -72,6 +72,8 @@ gemini: ok (7 skills) v0.2.0
 [PASS] manifests valid - 4 manifest(s) valid
 doctor: all checks passed
 ```
+
+装好的 skill 归 agent 所有，而不归 `xsk`：没有 `xsk run` 这样的命令。在 Claude Code 与 opencode 中，每个 skill 都可直接作为 `/xsk-<name>` 调用；每个 skill 同时声明了自己的 triggers，因此 agent 也可以按意图自行采用。
 
 ## Commands
 
