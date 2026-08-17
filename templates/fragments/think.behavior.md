@@ -20,10 +20,9 @@
 
 **7. Route ready work by execution shape.**
 
-- **Direct execution.** Recommend this for a one-file change, a single command, or other low-context work where delegation would add more ceremony than it removes.
-- **`xsk-execute-plan`.** Recommend this only for decision-light work whose execution is context-heavy enough that context-isolated subagents and a run ledger would help. Being multi-file or multi-step is a signal of that, never a substitute for it: two one-line edits in two files stay direct execution.
-- **Fuller workflow.** For large, high-risk, cross-session work, or work that still needs a durable full specification, route to `xsk-write-req` or the repository's fuller workflow. Do not recommend the lightweight executor.
+- **Direct execution.** Recommend this for work that can be implemented and inspected in the normal conversation: a one-file change, a single command, or a set of small interdependent edits. Being multi-file or multi-step does not by itself take work out of this shape: two one-line edits in two files stay direct execution.
+- **Fuller workflow.** For large, high-risk, cross-session work, or work that still needs a durable full specification, route to `xsk-write-req` or the repository's fuller workflow. Do not fold that route into direct execution.
 
-For the first two shapes, present all three user choices: direct execution, `xsk-execute-plan`, or revise the design and remain planning-only. Label one choice as recommended and give one sentence tied to the execution shape. Choosing `xsk-execute-plan` counts as an explicit invocation of that skill, but it does not skip that skill's task-breakdown and acceptance confirmation gate. The choice is never an automatic invocation.
+For the direct-execution shape, present two user choices: direct execution, or revise the design and remain planning-only. Label one choice as recommended and give one sentence tied to the execution shape. Neither choice is an automatic invocation of another skill.
 
 **8. Stop at the design.** Output the plan and routing, then stop and wait for approval or an explicit next-action selection. Do not write code. Choosing direct execution is explicit approval to implement through the normal conversation. Choosing revise keeps `xsk-think` planning-only and asks the user what to change; it is not a recursive skill invocation.

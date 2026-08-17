@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`xsk` (`@xenonbyte/xsk`) - zero-dependency Node >=20 CommonJS CLI that installs 9 curated agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed install/uninstall safety. `xsk` self-conforms to its own scaffold standard (`test/self-conformance.test.js` is the executable floor).
+`xsk` (`@xenonbyte/xsk`) - zero-dependency Node >=20 CommonJS CLI that installs 8 curated agent skills across Claude Code, Codex, opencode, and Gemini with manifest-backed install/uninstall safety. `xsk` self-conforms to its own scaffold standard (`test/self-conformance.test.js` is the executable floor).
 ## Commands
 - `npm test` - full `node --test` suite (auto-discovers `test/**/*.test.js`).
 - `node --test test/install.test.js` - one file; add `--test-name-pattern="phrase"` for one test.
@@ -12,7 +12,7 @@ No lint, typecheck, or build step. Run `npm test` + `npm run syntaxcheck` before
 Release shape (identical across every prior release): bump `version` in `package.json`, commit that file alone as `chore(release): vX.Y.Z`, tag `vX.Y.Z`, push main + tag, `npm publish`, `gh release create`. History is linear - merge feature branches `--ff-only`. Breaking changes bump the minor while 0.x. `npm publish` is irreversible; gate it on `npm test` + `npm run syntaxcheck` + `npm pack --dry-run`, and never publish/push/tag unless the user asked.
 
 ## Skills
-9 skills registered in `lib/skills.js` (shape `{ name, description, platforms, fragmentBase }`; `ALL_PLATFORMS = ['claude','codex','opencode','gemini']`): `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-check`, `xsk-execute-plan`. `xsk-bypass-claude` is Claude-only (`platforms: ['claude']`); the other 8 target all 4 platforms.
+8 skills registered in `lib/skills.js` (shape `{ name, description, platforms, fragmentBase }`; `ALL_PLATFORMS = ['claude','codex','opencode','gemini']`): `xsk-think`, `xsk-bypass-claude`, `xsk-skill-scaffold`, `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-check`. `xsk-bypass-claude` is Claude-only (`platforms: ['claude']`); the other 7 target all 4 platforms.
 
 ## Generation model - single source of truth
 `skills/<name>/SKILL.md` are GENERATED output. Do not hand-edit them; direct edits pass locally but fail `test/golden.test.js`.
@@ -30,26 +30,21 @@ Release shape (identical across every prior release): bump `version` in `package
   fs.writeFileSync(`skills/${s.fragmentBase}/SKILL.md`, content);
   fs.writeFileSync(`test/fixtures/golden/${s.name}.md`, content.replace(sharedTrim, '<SHARED_MASKED>'));
   ```
-- Adding a new skill = new registry entry + four new fragments + regenerate packed + golden, then sync every site that hardcodes the skill set: `test/generator.test.js` (count in title + sorted names list), `test/install.test.js` (per-platform count assertions + title; claude=N, non-claude platforms=N-1 since `xsk-bypass-claude` is claude-only), `test/self-conformance.test.js` (packed-file list), `test/skill-behavior.test.js` (per-skill block); a table row + the body count phrases in both READMEs; this file's header count and `## Skills` list; CLAUDE.md's `Skill runtime stores` section and the `.xsk/` line under `Skill content rules` below when the skill touches `.xsk/`. `npm test` guards the test-file + README-parity edits; the README and this file's counts have NO test - eyeball them.
+- Adding a new skill = new registry entry + four new fragments + regenerate packed + golden, then sync every site that hardcodes the skill set: `test/generator.test.js` (count in title + sorted names list), `test/install.test.js` (per-platform count assertions + title; claude=N, non-claude platforms=N-1 since `xsk-bypass-claude` is claude-only), `test/self-conformance.test.js` (packed-file list), `test/skill-behavior.test.js` (per-skill block); a table row + all five body count spots in both READMEs (intro sentence, feature bullet, the line above the table, the `xsk status` sample block, and the non-Claude count sentence right after it); this file's header count and `## Skills` list; CLAUDE.md's `Skill runtime stores` section and the `.xsk/` line under `Skill content rules` below when the skill touches `.xsk/`. `npm test` guards the test-file + README-parity edits; the README and this file's counts have NO test - eyeball them, and note this file states the count twice (opening line + `## Skills`), each going stale on its own.
 
 ## Which test goes red tells you what you forgot
 `body()` in `test/skill-behavior.test.js` calls `buildSkill()` at run time, so every content assertion flips the instant a fragment changes, regenerated or not; only the two `golden:` cases compare against on-disk files. Content assertions red = fragment and assertions disagree. `golden:` red alone = fragment is fine, you just have not regenerated.
 
 ## Skill handoff graph - names are load-bearing
-Fragments reference each other, so no skill is editable in isolation: `think` -> `xsk-execute-plan`, `xsk-write-req`; `execute-plan` -> `xsk-think` (accepted input + selection source); `consume-point` -> `xsk-point`, `xsk-write-req`; `point` -> `xsk-think`. Renaming or removing a skill means fixing every fragment naming it; `test/skill-behavior.test.js` asserts the handoff strings, so a miss fails instead of shipping a dangling pointer.
+Fragments reference each other, so no skill is editable in isolation: `think` -> `xsk-write-req`; `consume-point` -> `xsk-point`, `xsk-write-req`; `point` -> `xsk-think`. Renaming or removing a skill means fixing every fragment naming it; `test/skill-behavior.test.js` asserts the handoff strings, so a miss fails instead of shipping a dangling pointer.
 
-`xsk-think` never invokes an executor - it presents choices and stops. `xsk-execute-plan` is explicit-invocation-only and never self-triggers on execution intent (deliberate local rule, so it cannot collide with a harness's own plan/execution modes). Do not make either auto-chain.
-
-## `xsk-execute-plan` - two guards no other skill has
-Both in `test/skill-behavior.test.js`:
-- **Byte budget.** `EXECUTE_PLAN_PACKED_MAX` / `EXECUTE_PLAN_BEHAVIOR_MAX` cap packed skill + behavior fragment in UTF-8 bytes; this skill once reached 50757 bytes and its job is to be cheap to load. Over budget is a real signal: drop a guarantee, or raise the cap deliberately and state in the delivery what the bytes bought. Never raise a cap just to get green; keep the reasoning comment above the constants truthful.
-- **Retired-mechanism blacklist.** Removed mechanism names (`anchor-v1`, `JCS`, `acceptance fingerprint`, `reconciled HEAD`, ...) must not reappear, plus a ban on after-the-fact attribution language. The skill was deliberately rebuilt from an audit system into an orchestrator; this stops the audit machinery creeping back. Do not edit the list to accommodate new prose.
+`xsk-think` never invokes another skill - it presents choices and stops. Its ready-work routing is two choices only, direct execution or revise the design, with large or high-risk work routed to `xsk-write-req` instead. Do not make it auto-chain.
 
 ## Skill content rules
 - English. Triggers are multilingual cues, not exact-match incantations.
 - No em-dash (U+2014) or en-dash (U+2013) - applied project-wide, but the ONLY automated check is scoped to `xsk-write-req` (assertions sit inside that test in `test/generator.test.js`; the all-skills loops there check Waza scripts and relative paths, not dashes). A dash in any other fragment ships green - scan your own added lines (`git diff` `+` lines, not whole files: `test/skill-behavior.test.js` legitimately holds pre-existing em-dashes). Use ASCII hyphen, colon, or comma. No AI-formulaic filler (banned-phrase list pinned in `test/skill-behavior.test.js`).
 - Generated frontmatter is `name` + `description` only. Never add `when_to_use`/`dispatch_intent` as required fields (opencode ignores them - alias-collision rule).
-- `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan` describe reading/writing a project's `.xsk/` dir (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, `.xsk/.gitignore`). That is documented skill behavior living in the fragments, NOT runtime code in `lib/`; `lib/` never touches those paths.
+- `xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point` describe reading/writing a project's `.xsk/` dir (`.xsk/requirements/`, `.xsk/points/`, `.xsk/.gitignore`). That is documented skill behavior living in the fragments, NOT runtime code in `lib/`; `lib/` never touches those paths.
 
 ## Install/safety model
 `bin/xsk.js` `main(argv, options)` dispatches to `lib/install.js` (`install`), `lib/uninstall.js`, `lib/status.js` (`computeStatus`), `lib/capability.js` (`doctor`). Manifest owned by `lib/manifest.js` (`installed_paths`, `backups`, optional `installed_hashes`; `validateOperationalSemantics` checks every recorded path stays under its platform's skills root, or the commands root for command files). Ownership predicates and `MARKER`/`PACKAGE_NAME` live in `lib/ownership.js`, kept separate so install and uninstall have no require cycle.

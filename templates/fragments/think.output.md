@@ -12,7 +12,7 @@ Apply the outcome routing:
 
 - With unresolved **Open Questions**, ask them and stop. Do not show execution choices.
 - For a pure judgment with no implementation, stop after the summary. Do not show execution choices.
-- For a decision-complete plan with no Open Questions that fits direct or delegated execution, add **Next Action** with three choices: direct execution, `xsk-execute-plan`, or revise the design. Mark one as recommended and state why.
-- For large, high-risk, cross-session, or full-specification work, replace the lightweight execution choices with a route to `xsk-write-req` or the repository's fuller workflow, plus an option to revise or pause. Do not offer `xsk-execute-plan`.
+- For a decision-complete plan with no Open Questions that fits direct execution, add **Next Action** with two choices: direct execution, or revise the design. Mark one as recommended and state why.
+- For large, high-risk, cross-session, or full-specification work, replace the direct-execution choice with a route to `xsk-write-req` or the repository's fuller workflow, plus an option to revise or pause.
 
-Selecting `xsk-execute-plan` is an explicit invocation, not immediate dispatch: that skill must still present and confirm its task breakdown and acceptance envelope. Offer choices only; never invoke an executor automatically.
+Offer choices only. Never invoke another skill automatically, and never begin implementing on the strength of a recommendation the user has not picked.

@@ -14,8 +14,6 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
 const { buildSkill } = require('../lib/generator');
 const { skills } = require('../lib/skills');
 
@@ -62,8 +60,11 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
   assert.ok(/Proposed Design Summary/.test(c), 'output is a Proposed Design Summary');
   assert.ok(!/Approved Design Summary/.test(c), 'output does not use Approved Design Summary');
   assert.ok(/stop/i.test(c) && /wait for approval/.test(c), 'stops and waits');
-  assert.ok(/xsk-execute-plan/.test(c), 'offers execute-plan handoff');
-  assert.ok(/never an automatic invocation/.test(c), 'offer never auto-runs');
+  assert.ok(/direct execution, or revise the design/.test(c), 'offers the two-choice next action');
+  assert.ok(
+    /Neither choice is an automatic invocation of another skill/.test(c),
+    'offer never auto-runs',
+  );
 });
 
 test('skill-behavior: xsk-think: routes only decision-complete work by execution shape', () => {
@@ -81,32 +82,27 @@ test('skill-behavior: xsk-think: routes only decision-complete work by execution
     'only ready executable plans reach execution-shape routing',
   );
   assert.ok(
-    /one-file change, a single command, or other low-context work/.test(c),
+    /a one-file change, a single command, or a set of small interdependent edits/.test(c),
     'one-file and single-command work recommends direct execution',
   );
   assert.ok(
-    /only for decision-light work whose execution is context-heavy enough/.test(c),
-    'context-heavy execution is the necessary condition for recommending execute-plan',
+    /Being multi-file or multi-step does not by itself take work out of this shape: two one-line edits in two files stay direct execution/.test(c),
+    'file or step count alone does not push work out of direct execution',
   );
   assert.ok(
-    /Being multi-file or multi-step is a signal of that, never a substitute for it: two one-line edits in two files stay direct execution/.test(c),
-    'file or step count alone does not route work to the executor',
-  );
-  assert.ok(
-    /large, high-risk, cross-session work[\s\S]*?xsk-write-req[\s\S]*?Do not recommend the lightweight executor/.test(c),
+    /large, high-risk, cross-session work[\s\S]*?xsk-write-req[\s\S]*?Do not fold that route into direct execution/.test(c),
     'large or high-risk work routes to a fuller workflow',
   );
   assert.ok(
-    /present all three user choices: direct execution, `xsk-execute-plan`, or revise the design/.test(c),
-    'ready lightweight work presents all three next actions',
+    /present two user choices: direct execution, or revise the design and remain planning-only/.test(c),
+    'ready work presents both next actions',
   );
   assert.ok(/Label one choice as recommended/.test(c), 'routing labels a shape-based recommendation');
   assert.ok(/\*\*Next Action\*\*/.test(c), 'output names the next-action section');
   assert.ok(
-    /Choosing `xsk-execute-plan` counts as an explicit invocation[\s\S]*?does not skip that skill's task-breakdown and acceptance confirmation gate/.test(c),
-    'executor selection is explicit but retains its own confirmation gate',
+    /Offer choices only\. Never invoke another skill automatically, and never begin implementing on the strength of a recommendation the user has not picked/.test(c),
+    'a recommendation is never self-approval to start implementing',
   );
-  assert.ok(/never an automatic invocation/.test(c), 'routing never auto-invokes an executor');
   assert.ok(
     /planning-only[\s\S]*?When the user picks direct execution, implementation continues outside this skill through the normal conversation/.test(c),
     'planning-only holds: direct execution runs outside this skill',
@@ -352,285 +348,6 @@ test('skill-behavior: xsk-consume-point: scans ready points, guards single-activ
   assert.ok(
     /git add -- <those paths> && git commit -m "docs\(xsk\): drop point <slug>" -- <those paths>/.test(c),
     'stages the deletion then path-limits the drop commit');
-});
-
-// xsk-execute-plan content contract.
-//
-// These assertions check what the generated document says, which is all a pure
-// instruction skill can be tested for. They do not and cannot prove that an
-// agent reading it behaves this way at runtime.
-//
-// One assertion per property, one pattern per assertion. Chaining patterns with
-// && shrinks the assertion count without shrinking the contract, and hides
-// which clause broke; splitting a property across several patterns pins prose
-// rather than behavior. Both were tried here and both were wrong.
-//
-// The byte budgets are a product decision: this skill once reached 50757 bytes
-// of forensic protocol, which is worse than useless in a skill whose job is to
-// be cheap to load. Raising one is the same kind of decision, not a convenience
-// value, and it belongs with a delivery note saying what the bytes bought or
-// gave up.
-//
-// These caps deliberately rose from 13200/10200. The added bytes buy five
-// safety guarantees: recovery refreshes repository rules; the runs ignore
-// lands before the ledger; acceptance can persist interruptions; every
-// verification command and post-fix rerun gets an immediate invariant check;
-// and worktree exclusivity stays explicitly unverified. Each cap rounds the
-// measured size up to the next hundred, leaving room for a typo fix and not a
-// new mechanism.
-const EXECUTE_PLAN_PACKED_MAX = 14100;
-const EXECUTE_PLAN_BEHAVIOR_MAX = 11000;
-
-test('skill-behavior: xsk-execute-plan: invocation and admission', () => {
-  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
-  assert.ok(/explicitly invoked only/.test(c), 'explicit invocation only');
-  assert.ok(
-    /Selection from `xsk-think` is an explicit invocation[\s\S]*?never bypasses this skill's task-breakdown and acceptance confirmation gate/.test(c),
-    'the think handoff starts intake without skipping this skill gate',
-  );
-  assert.ok(
-    /orchestrator, not an audit system[\s\S]*?requires a workspace where that proof is unnecessary/.test(c),
-    'purpose claims orchestration, not forensic proof',
-  );
-  assert.ok(
-    /`git rev-parse --is-inside-work-tree` and `git rev-parse --verify HEAD` both succeed/.test(c),
-    'a committed Git baseline is required',
-  );
-  assert.ok(
-    /With no content baseline this skill could never show that a pending edit survived, so a task could overwrite one and still pass every check/.test(c),
-    'a fresh run needs a clean tree, and the text says which overwrite that prevents',
-  );
-  assert.ok(
-    /If `\.xsk\/runs\/<slug>\.md` already exists, go straight to step 6/.test(c),
-    'an existing ledger routes to recovery before admission can refuse it',
-  );
-  assert.ok(
-    /Only whole-worktree cleanliness is admission-only/.test(c),
-    'cleanliness is admission-only, so a run does not abort on its own writes',
-  );
-  assert.ok(
-    /The rest are run-wide invariants: `HEAD` equal to `base`, an empty index, changes confined to the allowed and orchestration-owned paths, no forbidden action, no ignored-path deliverable\. Any of them breaking at any point sets `status: interrupted` and stops the run/.test(c),
-    'the run-wide invariants are named once, and breaking one interrupts the run',
-  );
-  assert.ok(
-    /Refuse with the remedy, not a bare stop/.test(c),
-    'refusal names the way forward instead of only stopping',
-  );
-  assert.ok(/Never silently degrade into inline execution/.test(c), 'no silent fallback to inline execution');
-});
-
-test('skill-behavior: xsk-execute-plan: gate, ledger, and dispatch', () => {
-  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
-  assert.ok(
-    /no parallel writers, no `commit`, `branch`, `stash`, `reset`, `merge`, or `rebase`, no remote or external mutation, no destructive or irreversible action, no platform permission prompt, and no new product decision/.test(c),
-    'the out-of-scope actions are enumerated',
-  );
-  assert.ok(
-    /Record it as a declaration and never report it as verified/.test(c),
-    'exclusive use of the worktree is declared by the user, never reported as verified',
-  );
-  assert.ok(
-    /Invariant checks catch only observable out-of-envelope changes; they cannot detect another writer editing a path already inside the allowed set, so exclusive worktree use remains an unverified premise throughout/.test(c),
-    'scope checks do not turn the exclusivity premise into a verified claim',
-  );
-  assert.ok(
-    /The ledger is a recovery log, not tamper-evident evidence and not a deliverable/.test(c),
-    'the ledger claims recovery value only',
-  );
-  assert.ok(
-    /declare it as an orchestration-owned path, since a path this skill writes without confirming would later read as scope drift against itself/.test(c),
-    'the skill declares its own gitignore write instead of tripping on it',
-  );
-  assert.ok(
-    /first write the `\.xsk\/\.gitignore` change[\s\S]*?If this write fails, stop before creating the ledger\. Then write `\.xsk\/runs\/<slug>\.md`/.test(c),
-    'the runs ignore is installed before the ledger can become Git-visible',
-  );
-  assert.ok(
-    /At every invariant check in steps 4-6, a broken invariant always permits an immediate ledger write of `status: interrupted`, including during acceptance; write it before stopping/.test(c),
-    'every invariant check can persist an interruption before stopping',
-  );
-  assert.ok(
-    /Per task, check the run-wide invariants twice: before writing `in-flight`, and again when the subagent returns/.test(c),
-    'each task is bracketed by the invariant check on both sides',
-  );
-  assert.ok(
-    /record two separately sourced facts, never merged into one claim: the paths the subagent reported, and the Git-visible changes now observable/.test(c),
-    'reported paths and observed changes stay separate facts',
-  );
-  assert.ok(
-    /A task that ends `failed` sets `status: failed` and blocks its dependents/.test(c),
-    'a failed task ends the run and blocks its dependents',
-  );
-  assert.ok(/Between tasks there is no code review and no acceptance run/.test(c), 'no per-task review');
-  assert.ok(
-    /Require nothing else back: no diff, no file contents, no task restatement/.test(c),
-    'the implementer return is bounded below file contents',
-  );
-  assert.ok(
-    /For each task-acceptance check, report its final run after the task's last write and exit result/.test(c),
-    'only the final run of each acceptance check, taken after the last write, counts',
-  );
-  assert.ok(
-    /or `not run` and why/.test(c),
-    'a check that was not run is reported as such, with a reason',
-  );
-  assert.ok(
-    /an omitted check becomes `not run: not reported`/.test(c),
-    'an unreported check is marked rather than silently dropped',
-  );
-  assert.ok(
-    /any failed final check[\s\S]*?makes the task `failed`/.test(c),
-    'a failing final check fails the task',
-  );
-  assert.ok(
-    /missing or malformed task result makes the task `failed`/.test(c),
-    'an unusable task result fails the task instead of passing as done',
-  );
-  assert.ok(
-    /Otherwise write `done` and keep the check evidence for step 7/.test(c),
-    'the remaining returns write `done` and carry their check evidence to the report',
-  );
-  assert.ok(
-    /for step 5's bounded fix/.test(c),
-    'the ledger write boundary admits the one bounded fix',
-  );
-});
-
-test('skill-behavior: xsk-execute-plan: acceptance, recovery, and reporting', () => {
-  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
-  assert.ok(
-    /fresh reviewer that implemented no task and modifies no files/.test(c),
-    'acceptance uses an independent, non-writing reviewer',
-  );
-  assert.ok(
-    /read the untracked paths directly, since a plain diff omits them and a whole new source file would otherwise never reach review/.test(c),
-    'review material covers the paths a plain diff hides',
-  );
-  assert.ok(
-    /Allow at most one bounded fix[\s\S]*?Only a `done` fix reruns all commands and the reviewer once; never loop/.test(c),
-    'fixes are bounded and fully revalidated',
-  );
-  assert.ok(
-    /functional acceptance not run[\s\S]*?zero gates must never look verified/.test(c),
-    'a run with no gates never looks verified',
-  );
-  assert.ok(
-    /Immediately after each command, before running the next, re-check the invariants[\s\S]*?Apply the same per-command check to every post-fix rerun/.test(c),
-    'every verification command and post-fix rerun is followed immediately by an invariant check',
-  );
-  assert.ok(
-    /Route on status first\. A `done`, `failed`, or `interrupted` ledger is history[\s\S]*?Only a `running` ledger, left by a session that ended mid-run, is resumable/.test(c),
-    'every ledger state has exactly one recovery route',
-  );
-  assert.ok(
-    /Starting over means retiring the ledger and re-entering step 1 for full admission and a fresh gate, never a shortcut from here/.test(c),
-    'a rerun re-enters admission instead of overwriting the ledger in place',
-  );
-  assert.ok(
-    /Before any redispatch, repeat step 1's brief scan of `CLAUDE\.md`, `AGENTS\.md`, and repo rules\. The ledger does not preserve these constraints, so refresh the applicable hard rules in each pending-task prompt/.test(c),
-    'recovery refreshes repository hard rules before pending tasks are redispatched',
-  );
-  assert.ok(
-    /Never re-dispatch it and never infer what it did: set the run to `interrupted` and stop/.test(c),
-    'an in-flight task is never re-dispatched or attributed',
-  );
-  assert.ok(
-    /a matching slug is not proof of a matching request/.test(c),
-    'resume confirms the work itself, not just the slug',
-  );
-  assert.ok(
-    /First write the acceptance results and the final `status` into the ledger[\s\S]*?never report a terminal outcome before that write lands/.test(c),
-    'the terminal status reaches disk before it is reported',
-  );
-  assert.ok(
-    c.includes('"Ignored paths were not scanned: side effects there are outside this report."'),
-    'the report carries a fixed line naming what was not checked',
-  );
-  assert.ok(/Do not commit, push, or publish unless the user asks/.test(c), 'stops without committing');
-  assert.ok(
-    /diff against `base` itself/.test(c),
-    'the reviewer takes the tracked diff itself instead of being handed one',
-  );
-  assert.ok(
-    !/the diff against `base`/.test(c),
-    'no diff body is relayed through this conversation',
-  );
-  assert.ok(
-    /Require exactly `no concerns` when clean/.test(c),
-    'a clean review has one exact wording',
-  );
-  assert.ok(
-    /each naming what is wrong and identifying one or more affected paths or an acceptance criterion, without quoting file contents/.test(c),
-    'a concern names the fault and where it lands without quoting file contents',
-  );
-  assert.ok(
-    /Empty or malformed review makes acceptance `failed`; dispatch no fix/.test(c),
-    'an unusable review fails acceptance and dispatches no fix',
-  );
-  assert.ok(
-    /A valid concern or command failure is a functional failure/.test(c),
-    'only a valid concern or a failing command counts as a functional failure',
-  );
-  assert.ok(
-    /only inside the confirmed envelope; otherwise set the run to `failed` without dispatch/.test(c),
-    'a fix never widens the confirmed envelope',
-  );
-  assert.ok(
-    /Append it to the ledger as the run's one fix/.test(c),
-    'the one-fix allowance is recorded on the ledger, so recovery can read it',
-  );
-  assert.ok(
-    /an ordinary serial task under every step 4 rule/.test(c),
-    'the fix inherits every step 4 task rule',
-  );
-  assert.ok(
-    /each failing command with its exit result, but no command output; it re-reads code and reruns them for diagnostics/.test(c),
-    'the fixer gets commands and exit results, then reruns them for its own diagnostics',
-  );
-  assert.ok(
-    /A failed fix goes to step 7/.test(c),
-    'a failed fix ends the run instead of buying another pass',
-  );
-});
-
-test('skill-behavior: xsk-execute-plan: stays inside its byte budget', () => {
-  // Measured in UTF-8 bytes, matching the units the budget is written in.
-  // String.length would count UTF-16 code units instead.
-  const packed = Buffer.byteLength(
-    buildSkill(skills.find((s) => s.name === 'xsk-execute-plan')).content,
-    'utf8',
-  );
-  const behavior = readFileSync(
-    join(__dirname, '..', 'templates', 'fragments', 'execute-plan.behavior.md'),
-  ).length;
-  assert.ok(
-    packed <= EXECUTE_PLAN_PACKED_MAX,
-    `packed skill is ${packed} bytes, over the ${EXECUTE_PLAN_PACKED_MAX} budget: drop a guarantee or raise the cap deliberately`,
-  );
-  assert.ok(
-    behavior <= EXECUTE_PLAN_BEHAVIOR_MAX,
-    `behavior fragment is ${behavior} bytes, over the ${EXECUTE_PLAN_BEHAVIOR_MAX} budget: drop a guarantee or raise the cap deliberately`,
-  );
-});
-
-test('skill-behavior: xsk-execute-plan: retired forensic mechanisms do not return', () => {
-  const c = body(skills.find((s) => s.name === 'xsk-execute-plan'));
-  // Only unambiguous mechanism names are banned. Ordinary phrases such as
-  // "repository-wide" stay legal, because the document may need to say what it
-  // does not do.
-  for (const mechanism of [
-    'anchor-v1',
-    'JCS',
-    'path-state-v1',
-    'directory-manifest-v1',
-    'xsk-execute-plan-input-v1',
-    'acceptance fingerprint',
-    'prior-run carryover',
-    'reconciled HEAD',
-  ]) {
-    assert.ok(!c.includes(mechanism), `retired mechanism "${mechanism}" is absent`);
-  }
-  assert.ok(!/actual touched paths/.test(c), 'no attribution language returns');
 });
 
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {

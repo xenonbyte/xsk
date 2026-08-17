@@ -51,11 +51,11 @@ Adding a new skill = new `lib/skills.js` registry entry + four new fragments + r
 - `test/install.test.js`: the per-platform count assertions and the test title (claude gets all N; the non-claude platforms get N-1 because `xsk-bypass-claude` is claude-only).
 - `test/self-conformance.test.js`: the required packed-file list (`skills/<base>/SKILL.md`).
 - `test/skill-behavior.test.js`: a per-skill behavior assertion block.
-- Both READMEs: a table row AND the body count phrases (the `nine`/`seven` style counts, three per README).
+- Both READMEs: a table row AND all five body count spots (the intro sentence, the feature bullet, the `Eight skills` line above the table, the `xsk status` sample block, and the sentence right after it saying how many the non-Claude platforms show).
 - `AGENTS.md`: the header install count and the `## Skills` list/count (this is the twin of this file for non-Claude agents).
 - The `Skill runtime stores` section below (and its `AGENTS.md` counterpart) when the skill reads/writes `.xsk/`.
 
-`npm test` is the backstop for the test-file and README-parity edits, but the README and `AGENTS.md` counts have no test guard: verify those by eye.
+`npm test` is the backstop for the test-file and README-parity edits, but the README and `AGENTS.md` counts have no test guard: verify those by eye. `AGENTS.md` carries the count twice, in its opening line and under `## Skills`; both go stale independently.
 
 ## Install / safety model
 
@@ -81,20 +81,13 @@ Safety invariants that span these files:
 
 ## Skills reference each other, and the names are load-bearing
 
-The fragments form a handoff graph, so a skill is not editable in isolation: `think` routes to `xsk-execute-plan` and `xsk-write-req`; `execute-plan` names `xsk-think` as an accepted input and as a selection source; `consume-point` hands off to `xsk-write-req` and archives `xsk-point` docs; `point` names `xsk-think`. Renaming or removing a skill means fixing every fragment that names it. `test/skill-behavior.test.js` asserts these handoff strings, so a missed one fails rather than silently producing a skill that points at nothing.
+The fragments form a handoff graph, so a skill is not editable in isolation: `think` routes to `xsk-write-req`; `consume-point` hands off to `xsk-write-req` and archives `xsk-point` docs; `point` names `xsk-think`. Renaming or removing a skill means fixing every fragment that names it. `test/skill-behavior.test.js` asserts these handoff strings, so a missed one fails rather than silently producing a skill that points at nothing.
 
-`xsk-think` never invokes an executor: it presents choices and stops. `xsk-execute-plan` is explicit-invocation-only and does not self-trigger on execution intent, a deliberate local rule so it cannot collide with a harness's own plan or execution modes. Do not "helpfully" make either one auto-chain.
-
-## `xsk-execute-plan` carries two guards no other skill has
-
-Both live in `test/skill-behavior.test.js`:
-
-- **A byte budget.** `EXECUTE_PLAN_PACKED_MAX` and `EXECUTE_PLAN_BEHAVIOR_MAX` cap the packed skill and its behavior fragment in UTF-8 bytes, because a skill whose job is to be cheap to load once reached 50757 bytes. Going over is a real signal: drop a guarantee, or raise the cap as a deliberate product decision and say in the delivery what the bytes bought. Never raise a cap just to get green. The comment above the constants records the current reasoning; keep it truthful when you change them.
-- **A retired-mechanism blacklist.** A list of removed mechanism names (`anchor-v1`, `JCS`, `acceptance fingerprint`, `reconciled HEAD`, and others) that must not reappear, plus a ban on after-the-fact attribution language. This skill was deliberately rebuilt from an audit system into an orchestrator; the blacklist stops the audit machinery from creeping back. Do not edit the list to accommodate new prose.
+`xsk-think` never invokes another skill: it presents choices and stops. Its ready-work routing offers exactly two choices, direct execution or revise the design, and sends large or high-risk work to `xsk-write-req` instead. Do not "helpfully" make it auto-chain.
 
 ## Skill runtime stores
 
-Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`, `xsk-execute-plan`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, `.xsk/runs/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
+Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
 
 ## Not part of xsk (do not confuse for source)
 

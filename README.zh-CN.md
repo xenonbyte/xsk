@@ -17,13 +17,13 @@
 
 跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处，缺少统一的安装、manifest 与安全方案。
 
-`xsk`（`@xenonbyte/xsk`）同时解决这两点。它内置九个精选 skill（两个从第三方蒸馏而来，七个原创），以及一个零依赖 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，并精确记录它创建了哪些文件，使 `uninstall` 只移除这些文件，绝不多删。
+`xsk`（`@xenonbyte/xsk`）同时解决这两点。它内置八个精选 skill（两个从第三方蒸馏而来，六个原创），以及一个零依赖 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，并精确记录它创建了哪些文件，使 `uninstall` 只移除这些文件，绝不多删。
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
 ## Features
 
-- **九个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
+- **八个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
 - **四个平台，同一形态。** Claude Code、Codex、opencode 与 Gemini 共用 `<name>/SKILL.md` 布局；opencode 还额外获得可直接调用的 `/xsk-<name>` 命令。
 - **manifest 为后盾的安全。** owned-only removal、ownership markers、atomic writes、symlink refusal，以及 content-hash 漂移检测。
 - **uninstall-first 安装。** 重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`。
@@ -55,13 +55,13 @@ xsk help
 执行 `xsk install` 后，`xsk status` 会按平台分别报告：
 
 ```
-claude: ok (9 skills) v0.2.0
-codex: ok (8 skills) v0.2.0
-opencode: ok (8 skills) v0.2.0
-gemini: ok (8 skills) v0.2.0
+claude: ok (8 skills) v0.2.0
+codex: ok (7 skills) v0.2.0
+opencode: ok (7 skills) v0.2.0
+gemini: ok (7 skills) v0.2.0
 ```
 
-非 Claude 平台显示 8 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
+非 Claude 平台显示 7 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
 
 `xsk doctor` 检查的是环境而非安装结果，每项探测一行：
 
@@ -88,7 +88,7 @@ doctor: all checks passed
 
 ## Skills
 
-共九个 skill，统一前缀 `xsk-`：
+共八个 skill，统一前缀 `xsk-`：
 
 | Skill | Purpose |
 |---|---|
@@ -100,15 +100,13 @@ doctor: all checks passed
 | `xsk-check` | 在改动合入前评审：范围漂移、hard stops、证据门控的发现项，再验证后签收。蒸馏自 Waza `/check`。 |
 | `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
 | `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
-| `xsk-execute-plan` | 在干净的 Git worktree 中，把一个小型 plan 或需求编排成串行的 context-isolated subagent 任务，记录进精简的 `.xsk/runs/` ledger；只设一个确认门，全部完成后统一验收。仅限显式调用。 |
 
 > [!NOTE]
 > `xsk-bypass-claude` 仅面向 Claude Code；`xsk install` 会在其余三个平台跳过它。
 
 ### Choosing a skill
 
-- 当方案或重要决策尚未确定时使用 `xsk-think`。plan 达到 decision-complete 后，显式选择：小型、可逆工作直接执行；适合的任务用 `xsk-execute-plan`；或继续调整 plan。`xsk-think` 不会自动调用 executor。
-- 仅对 decision-light、context-heavy，且涉及多文件或多步骤、能从 context-isolated subagent 和 run ledger 获益的工作显式调用 `xsk-execute-plan`。它要求 Git worktree 干净，不满足时直接拒绝而不去猜测，因此请先 commit 或 stash。凡是小到可以直接核对的改动（包括单条命令或单文件改动）都应直接执行。
+- 当方案或重要决策尚未确定时使用 `xsk-think`。plan 达到 decision-complete 后，显式选择直接执行或继续调整 plan。`xsk-think` 不会自动调用其他 skill，implementation 在正常对话中继续。
 - 大型、高风险或跨会话工作应先用 `xsk-write-req` 建立 durable requirement，再进入项目的 full workflow 后实施。
 - 需要持久化研究时，显式采用 `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` 路径。每次转换都由用户选择，skill 不会自动串联。
 - 用 `xsk-check` 评审已有 change 或 diff，再合入。implementation 验收通过后，显式调用 `xsk-archive-req` 归档 active requirement。
