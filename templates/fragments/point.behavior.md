@@ -1,10 +1,10 @@
-**1. Ground in the current project.** Read the relevant code, config, and docs before forming any opinion. Never rely on memory for project-specific facts. Identify the one aspect under investigation and state it as a single sentence.
+**1. Ground one aspect.** Read relevant current code, config, and docs. State the aspect in one sentence. Apply `xsk-think`'s depth matching, option weighing, simplicity, and premise-collapse discipline, not its execution menu. Reuse relevant evidence and settled decisions; investigate gaps instead of restarting research.
 
-**2. Research with xsk-think's discipline.** Apply the same depth-matching, option-weighing, and premise-collapse discipline that `xsk-think` uses: match depth to the problem (lightweight, evaluation, or triage), declare premise collapse explicitly if one assumption invalidates everything, and reach a decision-complete landed plan. Do not stop at "it depends" - resolve the options and commit to one. If a blocking decision can only be resolved by the user, surface it as a single question before writing anything.
+**2. Bind the point identity.** Use a slug matching `^[a-z0-9]+(-[a-z0-9]+)*$`. Check `.xsk/points/<slug>.md` and `.xsk/points/archive/<slug>.md` before creating. Refine an explicitly named or clearly same-aspect active point in place; a different aspect needs a distinct unused slug. Do not overwrite a collision, reuse a historical slug, or reopen an archive implicitly. Keep filename and frontmatter slug identical.
 
-**3. Re-invoke-by-slug to refine.** If the user supplies a slug and `.xsk/points/<slug>.md` already exists, load it, treat the existing `## Research` and `## Landed plan` as prior context, and refine in place rather than starting over. Update the file with the refined content; do not create a duplicate.
+**3. Persist research and confirmation separately.** Save evidence, options, and any blocking user question with `status: researching`; an unresolved question need not prevent saving useful research. Ask substantive questions in dependency order. Promote to `status: ready` only when the landed plan is decision-complete and the user confirms that conclusion. Reuse an explicit confirmation already given, including an unambiguous request to adopt the stated conclusion; approval to commit is not approval of a conclusion. If refinement introduces an unresolved fork or changes an approved conclusion, return it to researching until resolved and confirmed.
 
-**4. Persist the point document.** Write `.xsk/points/<slug>.md` where `<slug>` is generated from the aspect title using the pattern `^[a-z0-9]+(-[a-z0-9]+)*$`. Set `status: researching` while work is in progress; promote to `status: ready` only when the `## Landed plan` is decision-complete and the user confirms.
+A conclusion such as no change, keep the current behavior, or a constraint is valid ready content when grounded and confirmed. Ready is not permanently fresh: check changed relevant facts when consuming, not age or HEAD changes alone.
 
 Point document schema:
 
@@ -19,27 +19,25 @@ created_at: <ISO date>
 
 ## Aspect
 
-One-sentence statement of the aspect under investigation.
+One-sentence scope.
 
 ## Research
 
-Evidence gathered, options considered, and tradeoffs weighed. Grounded in project reality.
+Necessary evidence, options, and tradeoffs.
 
 ## Landed plan
 
-The concrete, decision-complete outcome. No "TBD". No open forks.
+Confirmed outcome when ready; distinguish any provisional conclusion while researching.
+
+## Open Questions
+
+Only while needed: the unresolved decision and what answer is required.
 ```
 
-**5. Ensure the gitignore line.** Ensure `.xsk/.gitignore` contains the line `points/archive/` (relative to `.xsk/`). Create `.xsk/` and `.xsk/.gitignore` if absent; append the line only if it is missing; never overwrite an existing `.xsk/.gitignore`. Track `.xsk/.gitignore` as a path this run wrote when this step created it or appended the missing line.
+**4. Keep archive conventions.** Ensure `.xsk/.gitignore` contains `points/archive/`: create if absent, otherwise append only the missing line. Preserve existing rules and record changed paths. This does not untrack already tracked archives.
 
-**6. Offer to commit, git-aware.** Only after the point document is persisted, decide whether to offer a commit. Build the commit path set from every path this run wrote: the point document, plus `.xsk/.gitignore` if step 5 created it or appended the missing line. If the project is not a git repository (`git rev-parse --is-inside-work-tree` fails), or none of those paths has a change git would record, skip silently and say nothing about committing. Otherwise ask the user once whether to commit this point, and act on the answer:
+**5. Drop only when authorized.** A direct request to discard this point is sufficient confirmation; do not ask twice. Without that authorization, keep it active. Before writes, validate identity and check the archive target. Set `status: dropped`, `dropped_at`, and a short `dropped_reason`. If a target already exists, resume only when its body and other fields match the source and requested drop, allowing only the expected status/drop metadata changes; reuse its timestamp. On conflict preserve both files, writing nothing, and ask about the conflict. Use write-before-remove: write the archive, verify it landed, re-read the source to ensure its content has not changed, then remove it. A changed source remains active for reconciliation.
 
-- On yes, commit only that commit path set. Stage those exact paths first, then commit only them: `git add -- <those paths> && git commit -m "docs(xsk): research point <slug>" -- <those paths>`. Stage first because a bare `git commit -- <path>` rejects an untracked new doc. Never `git add -A` or `git add .`, so unrelated working-tree changes are never swept in.
-- On no, leave the document uncommitted and report that it was left for the user to commit.
+**6. Stop at the document.** The point document is the only deliverable; do not begin any code change or requirement write without the selected next action. Ready output may offer `xsk-consume-point` or retain the point; researching output names the unresolved question. Never invoke think's executor route from inside point.
 
-**7. Drop only on user confirmation.** If the user asks to drop a point, confirm before writing. On confirmation, set `status: dropped`, add `dropped_at: <ISO date>` and a one-line `dropped_reason` to the frontmatter. Before writing, check the archive target `.xsk/points/archive/<slug>.md`: if it already exists, stop, ask the user how to proceed, and leave everything unchanged, writing nothing. Otherwise move the file to `.xsk/points/archive/<slug>.md` using write-before-remove (write the archive copy first, confirm it landed, then remove the source). Then offer to commit the drop, git-aware. Build the drop commit path set from the recordable paths this run touched: the removed point source if git was tracking it, plus `.xsk/.gitignore` if step 5 created it or appended the missing `points/archive/` line. The archive copy lives under the git-ignored `points/archive/`, so it is intentionally not part of the drop commit path set. If the project is not a git repository (`git rev-parse --is-inside-work-tree` fails), or none of those paths has a change git would record, skip silently and say nothing about committing. Otherwise ask the user once whether to commit this drop, and act on the answer:
-
-- On yes, commit only that drop commit path set. Decide whether to include the removed point source with `git ls-files --error-unmatch <path>` (it still succeeds for a tracked file already removed from the working tree but still in the index); omit a point git never tracked, since its removal is not a change git records and listing a never-tracked, now-deleted path would make `git add` fail on an unmatched pathspec and abort the whole commit. Stage those exact paths first, then commit only them: `git add -- <those paths> && git commit -m "docs(xsk): drop point <slug>" -- <those paths>`. Never `git add -A` or `git add .`.
-- On no, leave the working tree as is and report that the deletion was left for the user to commit.
-
-**8. Stop at the document.** The point document is the only deliverable. Whether you wrote, refined, or dropped a point, stop once it is persisted and any commit offer is handled. Do not propose, offer, or begin any code change, scaffolding, or requirement document; implementation is a separate action that starts only on the user's explicit, later approval.
+Commit only when explicitly requested. Inspect the actual scoped diff, including pre-existing same-file/index edits. Stage only authorized content and recordable paths: a changed point, a source deletion only if tracked, and any ignore-file change. Never `git add -A` or `git add .`, and do not assume ignored archives are untracked. No commit offer is required to finish.

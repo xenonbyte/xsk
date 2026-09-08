@@ -17,13 +17,13 @@
 
 跨多个 AI coding agent 工作时有两类反复出现的摩擦：第三方 skill 包要么全装要么不装（all-or-nothing），自写的 skill 又散落各处，缺少统一的安装、manifest 与安全方案。
 
-`xsk`（`@xenonbyte/xsk`）同时解决这两点。它内置八个精选 skill（两个从第三方蒸馏而来，六个原创），以及一个零依赖 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，并精确记录它创建了哪些文件，使 `uninstall` 只移除这些文件，绝不多删。
+`xsk`（`@xenonbyte/xsk`）同时解决这两点。它内置九个精选 skill（两个从第三方蒸馏而来，七个原创），以及一个零依赖 CLI，把每个 skill 安装到所有受支持平台的 skill 目录，并精确记录它创建了哪些文件，使 `uninstall` 只移除这些文件，绝不多删。
 
 `xsk` 本身就是一个 agent-skill 项目，并符合它自己的 scaffold skill 所执行的同一套标准。
 
 ## Features
 
-- **八个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
+- **九个精选 skill**，不是全装或不装的整包，可全部安装，也可按平台挑选。
 - **四个平台，同一形态。** Claude Code、Codex、opencode 与 Gemini 共用 `<name>/SKILL.md` 布局；opencode 还额外获得可直接调用的 `/xsk-<name>` 命令。
 - **manifest 为后盾的安全。** owned-only removal、ownership markers、atomic writes、symlink refusal，以及 content-hash 漂移检测。
 - **uninstall-first 安装。** 重装会先重置此前 owned 的文件（清理已不再安装的 skill）再生成，无需手动 `uninstall`。
@@ -55,13 +55,13 @@ xsk help
 执行 `xsk install` 后，`xsk status` 会按平台分别报告：
 
 ```
-claude: ok (8 skills) v0.3.0
-codex: ok (7 skills) v0.3.0
-opencode: ok (7 skills) v0.3.0
-gemini: ok (7 skills) v0.3.0
+claude: ok (9 skills) v0.3.0
+codex: ok (8 skills) v0.3.0
+opencode: ok (8 skills) v0.3.0
+gemini: ok (8 skills) v0.3.0
 ```
 
-非 Claude 平台显示 7 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
+非 Claude 平台显示 8 个，是因为 `xsk-bypass-claude` 仅面向 Claude，在其余平台会被跳过。
 
 `xsk doctor` 检查的是环境而非安装结果，每项探测一行：
 
@@ -90,16 +90,17 @@ doctor: all checks passed
 
 ## Skills
 
-共八个 skill，统一前缀 `xsk-`：
+共九个 skill，统一前缀 `xsk-`：
 
 | Skill | Purpose |
 |---|---|
-| `xsk-think` | 把一个粗略想法在写任何代码之前变成 decision-complete 的 plan。蒸馏自 Waza `/think`。 |
+| `xsk-think` | 把粗略想法变成深度适当、decision-complete 的 plan，附验收方式和具体的下一步选项。蒸馏自 Waza `/think`。 |
 | `xsk-bypass-claude` | 通过写 `.claude/settings.local.json` 把当前项目设为 Claude Code bypass-permissions 模式。仅 Claude。 |
 | `xsk-skill-scaffold` | 把一个 agent-skill 项目带到 `xsk` 标准；若不是这类项目则拒绝。 |
 | `xsk-write-req` | 把白话需求转成 `.xsk/requirements/` 下合规的需求文档，并扎根于当前项目。 |
+| `xsk-execute-req` | 实施 active requirement 或明确选择交给本技能的 think 方案，完成验证和审查后自动归档。think 的内联执行仍在正常对话中进行。 |
 | `xsk-archive-req` | 把当前 active 需求文档归档到 `.xsk/requirements/archive/`。 |
-| `xsk-check` | 在改动合入前评审：范围漂移、hard stops、证据门控的发现项，再验证后签收。蒸馏自 Waza `/check`。 |
+| `xsk-check` | 在改动合入前评审：范围漂移、共同根因、有证据支持的发现项，以及对当前审查状态的验证。蒸馏自 Waza `/check`。 |
 | `xsk-point` | 把当前项目某一方面研究到 decision-complete 的落地方案，并作为 point 文档持久化到 `.xsk/points/`。 |
 | `xsk-consume-point` | 通过 `xsk-write-req` 把选定的 `.xsk/points/` 文档折叠进一份 `.xsk/requirements/` 文档，以 write-before-remove 方式归档已消费的 point。 |
 
@@ -108,10 +109,13 @@ doctor: all checks passed
 
 ### Choosing a skill
 
-- 当方案或重要决策尚未确定时使用 `xsk-think`。plan 达到 decision-complete 后，显式选择直接执行或继续调整 plan。`xsk-think` 不会自动调用其他 skill，implementation 在正常对话中继续。
-- 大型、高风险或跨会话工作应先用 `xsk-write-req` 建立 durable requirement，再进入项目的 full workflow 后实施。
-- 需要持久化研究时，显式采用 `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` 路径。每次转换都由用户选择，skill 不会自动串联。
-- 用 `xsk-check` 评审已有 change 或 diff，再合入。implementation 验收通过后，显式调用 `xsk-archive-req` 归档 active requirement。
+- 方案或重要决策尚未确定时使用 `xsk-think`。就绪后提供执行或调整选项，可用编号或自然语言选择。简单修改在正常对话中实施，不强制建文档；完整复杂需求直接推荐 `xsk-execute-req`，执行选项明确包含保存需求、实现、验证和成功后自动归档。think 在选择前保持 planning-only；未决问题和无需修改的判断不展示执行入口。
+- 只想保存需求、暂不实施时使用 `xsk-write-req`。所有形态都包含 Goal、Scope、Acceptance；允许按依赖分批实现，但不删减用户要求的范围。独立生成完成后提供执行或调整选项。
+- `xsk-execute-req` 接受 active requirement 或明确选择了需求执行路线的 think 方案。选择 inline/direct 的小任务仍在正常对话中实施，即使已有 active requirement 也不改道。需求执行路线的方案由内部 writer 保存，随后实现、验证、交给 `xsk-check` 审查，并在成功后自动归档。一份需求包含精简的 `Execution` 段，默认没有独立 PLAN 或运行台账；复用已有决策和有效验证。已有未提交修改、非 Git 项目和没有子代理均不阻止进入执行。
+- 持久化研究使用 `xsk-point` 保存证据和已确认的 ready 结论，再选择 `xsk-consume-point` 通过 writer 整合。consume 先预检整个批次，每次修改 point 前重新核对 source 和 archive target，新归档不得覆盖已有目标。检测到变化时保留已保存的需求，停止消费并协调差异；完成 point 归档后才交接执行。部分采纳保留剩余内容，稳定的 requirement slug 保证归档后来源关系仍可解析。
+- `xsk-check` 审查已有代码、配置、生成物和影响行为的技能指令。独立审查保持只读；明确的实现或修复请求覆盖范围内已确认问题。依据实际 Git diff 或非 Git 文件及验收证据审查，复用有效结果，避免重复检查。
+- 当前必要验收和审查都通过才算执行完成。未完成工作保持 active 并记录剩余项；实现已验证而归档失败时保留证据，核对当前状态后只补做未完成的归档。`xsk-archive-req` 也支持显式手动归档取消或被替代的需求，archived 状态本身不是实现完成的证明。
+- 内部 writer、checker、archiver 完成后返回调用者，不插入额外审批菜单、递归执行或提交询问。选择执行授权的是已说明的流程，不包含 Git 提交、真实安装、推送或发布。`.xsk/requirements/archive/` 和 `.xsk/points/archive/` 默认为本机忽略记录，已跟踪文件除外；归档不会自动提交，也不保证新 clone 能恢复。
 
 ## How it works
 

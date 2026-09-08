@@ -1,0 +1,1 @@
+Implement an active requirement or a decision-complete `xsk-think` plan the user has explicitly routed to `xsk-execute-req`. Keep one requirement document, implement and verify its full scope, then automatically archive it on success. A think inline/direct execution choice stays in normal conversation and does not activate this workflow.

@@ -1,0 +1,3 @@
+Report the outcome first: completed and archived, incomplete with remaining work, or implementation verified with persistence/archival still pending. Include a concise change summary, actual verification results and material untested layers, and the real active or archived requirement path. Do not print the entire requirement or task history.
+
+For incomplete work, name the blocker and next executable action. For successful work, link `.xsk/requirements/archive/<slug>.md`; ignored archive records are local, not automatically committed or recoverable from a fresh clone. Then stop, or return the result to an invoking workflow. Do not add a commit or next-action approval menu.

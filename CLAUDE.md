@@ -36,14 +36,15 @@ To change a skill, edit the fragment(s) and/or the `lib/skills.js` entry, then r
 
 ```js
 // node -e '...' from the repo root
-const fs = require('fs');
+const fs = require('node:fs');
 const { buildSkill } = require('./lib/generator');
 const { get } = require('./lib/skills');
+const { atomicWriteFile } = require('./lib/manifest');
 const sharedTrim = fs.readFileSync('shared/skill-common.md', 'utf8').trim();
 const s = get('xsk-write-req');                                  // the skill you changed
 const content = buildSkill(s).content;
-fs.writeFileSync(`skills/${s.fragmentBase}/SKILL.md`, content);
-fs.writeFileSync(`test/fixtures/golden/${s.name}.md`, content.replace(sharedTrim, '<SHARED_MASKED>'));
+atomicWriteFile(`skills/${s.fragmentBase}/SKILL.md`, content);
+atomicWriteFile(`test/fixtures/golden/${s.name}.md`, content.replace(sharedTrim, '<SHARED_MASKED>'));
 ```
 
 Adding a new skill = new `lib/skills.js` registry entry + four new fragments + regenerate the packed skill AND its golden, then sync every place that hardcodes the skill set:
@@ -51,7 +52,7 @@ Adding a new skill = new `lib/skills.js` registry entry + four new fragments + r
 - `test/install.test.js`: the per-platform count assertions and the test title (claude gets all N; the non-claude platforms get N-1 because `xsk-bypass-claude` is claude-only).
 - `test/self-conformance.test.js`: the required packed-file list (`skills/<base>/SKILL.md`).
 - `test/skill-behavior.test.js`: a per-skill behavior assertion block.
-- Both READMEs: a table row AND all five body count spots (the intro sentence, the feature bullet, the `Eight skills` line above the table, the `xsk status` sample block, and the sentence right after it saying how many the non-Claude platforms show).
+- Both READMEs: a table row AND all five body count spots (the intro sentence, the feature bullet, the `Nine skills` line above the table, the `xsk status` sample block, and the sentence right after it saying how many the non-Claude platforms show).
 - `AGENTS.md`: the header install count and the `## Skills` list/count (this is the twin of this file for non-Claude agents).
 - The `Skill runtime stores` section below (and its `AGENTS.md` counterpart) when the skill reads/writes `.xsk/`.
 
@@ -81,13 +82,13 @@ Safety invariants that span these files:
 
 ## Skills reference each other, and the names are load-bearing
 
-The fragments form a handoff graph, so a skill is not editable in isolation: `think` routes to `xsk-write-req`; `consume-point` hands off to `xsk-write-req` and archives `xsk-point` docs; `point` names `xsk-think`. Renaming or removing a skill means fixing every fragment that names it. `test/skill-behavior.test.js` asserts these handoff strings, so a missed one fails rather than silently producing a skill that points at nothing.
+The fragments form a handoff graph: `think` offers `xsk-execute-req` or documentation-only `xsk-write-req`; `point` applies think's research discipline and offers `xsk-consume-point`; `consume-point` uses writer and archives points before offering executor; executor uses writer, `xsk-check`, and `xsk-archive-req`. Nested calls return to their caller without next-action menus or commit offers. Renaming or removing a skill means fixing each handoff; tests pin these names.
 
-`xsk-think` never invokes another skill: it presents choices and stops. Its ready-work routing offers exactly two choices, direct execution or revise the design, and sends large or high-risk work to `xsk-write-req` instead. Do not "helpfully" make it auto-chain.
+`xsk-think` stays planning-only and never invokes a skill before selection. Ready work offers execution or revision: small changes execute inline, complete complex work goes directly to `xsk-execute-req`, and documentation-only intent goes to writer. Selection authorizes the stated route without repeating approval. Executor saves a summary internally, keeps progress in the requirement's Execution section, and automatically archives only after current required acceptance and review pass. Failed archival preserves completed implementation evidence for a scoped retry. Git commits, real installation, and publication remain on demand.
 
 ## Skill runtime stores
 
-Several skills (`xsk-write-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
+Several skills (`xsk-write-req`, `xsk-execute-req`, `xsk-archive-req`, `xsk-point`, `xsk-consume-point`) describe behavior that reads/writes a project's `.xsk/` directory (`.xsk/requirements/`, `.xsk/points/`, and a `.xsk/.gitignore`). That is the documented behavior of the generated skills (it lives in the fragments), not runtime code in `lib/`; `lib/` never reads those store paths.
 
 ## Not part of xsk (do not confuse for source)
 

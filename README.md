@@ -17,13 +17,13 @@
 
 Working across AI coding agents has two recurring frictions: third-party skill packs are all-or-nothing, and self-authored skills end up scattered with no shared install, manifest, or safety story.
 
-`xsk` (`@xenonbyte/xsk`) solves both. It ships eight curated skills (two distilled from third parties, six original) and a zero-dependency CLI that installs each one into every supported platform's skill directory, then records exactly what it created so `uninstall` removes only those files and nothing else.
+`xsk` (`@xenonbyte/xsk`) solves both. It ships nine curated skills (two distilled from third parties, seven original) and a zero-dependency CLI that installs each one into every supported platform's skill directory, then records exactly what it created so `uninstall` removes only those files and nothing else.
 
 `xsk` is itself an agent-skill project and conforms to the same standard its own scaffold skill enforces.
 
 ## Features
 
-- **Eight curated skills**, not an all-or-nothing pack: install everything, or pick per platform.
+- **Nine curated skills**, not an all-or-nothing pack: install everything, or pick per platform.
 - **Four platforms, one shape.** Claude Code, Codex, opencode, and Gemini share a `<name>/SKILL.md` layout; opencode additionally gets directly invocable `/xsk-<name>` commands.
 - **Manifest-backed safety.** Owned-only removal, ownership markers, atomic writes, symlink refusal, and content-hash drift detection.
 - **Uninstall-first installs.** A reinstall resets prior owned files (pruning skills no longer installed) before regenerating, so no manual `uninstall` is needed.
@@ -55,13 +55,13 @@ xsk help
 After `xsk install`, `xsk status` reports each platform independently:
 
 ```
-claude: ok (8 skills) v0.3.0
-codex: ok (7 skills) v0.3.0
-opencode: ok (7 skills) v0.3.0
-gemini: ok (7 skills) v0.3.0
+claude: ok (9 skills) v0.3.0
+codex: ok (8 skills) v0.3.0
+opencode: ok (8 skills) v0.3.0
+gemini: ok (8 skills) v0.3.0
 ```
 
-The non-Claude platforms show 7 because `xsk-bypass-claude` is Claude-only and is skipped there.
+The non-Claude platforms show 8 because `xsk-bypass-claude` is Claude-only and is skipped there.
 
 `xsk doctor` checks the environment rather than the install, one line per probe:
 
@@ -90,16 +90,17 @@ Unknown options fail loud with a non-zero exit.
 
 ## Skills
 
-Eight skills, prefixed `xsk-`:
+Nine skills, prefixed `xsk-`:
 
 | Skill | Purpose |
 |---|---|
-| `xsk-think` | Turn a rough idea into a decision-complete plan before any code is written. Distilled from Waza `/think`. |
+| `xsk-think` | Turn a rough idea into a proportionate, decision-complete plan with acceptance checks and concrete next-action choices. Distilled from Waza `/think`. |
 | `xsk-bypass-claude` | Set the current project to Claude Code bypass-permissions mode by writing `.claude/settings.local.json`. Claude only. |
 | `xsk-skill-scaffold` | Bring an agent-skill project up to the `xsk` standard, or refuse if it is not one. |
 | `xsk-write-req` | Convert plain-language needs into a compliant requirement doc in `.xsk/requirements/`, grounded in the current project. |
+| `xsk-execute-req` | Implement an active requirement or a think plan explicitly routed to this skill, verify and review the result, then automatically archive on success. Inline think execution stays in normal conversation. |
 | `xsk-archive-req` | Archive the active requirement doc into `.xsk/requirements/archive/`. |
-| `xsk-check` | Review a code change before it ships: scope drift, hard stops, evidence-gated findings, then verify and sign off. Distilled from Waza `/check`. |
+| `xsk-check` | Review changes before they ship: scope drift, shared root causes, evidence-gated findings, and verification of the reviewed state. Distilled from Waza `/check`. |
 | `xsk-point` | Research one aspect of the current project to a decision-complete landed plan and persist it as a point document in `.xsk/points/`. |
 | `xsk-consume-point` | Fold selected `.xsk/points/` documents into one `.xsk/requirements/` doc via `xsk-write-req`, archiving consumed points write-before-remove. |
 
@@ -108,10 +109,13 @@ Eight skills, prefixed `xsk-`:
 
 ### Choosing a skill
 
-- Use `xsk-think` while the approach or important decisions are unsettled. Once its plan is decision-complete, explicitly choose direct execution or a revision of the plan. `xsk-think` never invokes another skill automatically, and implementation continues in the normal conversation.
-- For large, high-risk, or cross-session work, create a durable requirement with `xsk-write-req` and use the project's full workflow before implementation.
-- For durable research, use the explicit `xsk-point` -> `xsk-consume-point` -> `xsk-write-req` path. Each transition is user-selected; no skill chains automatically.
-- Use `xsk-check` to review an existing change or diff before merge. After an implementation is accepted, invoke `xsk-archive-req` explicitly to archive its active requirement.
+- Use `xsk-think` while the approach or important decisions are unsettled. Ready work offers execution or revision; select by number or natural language. Small edits execute in normal conversation without a forced document. Complete complex work routes directly to `xsk-execute-req`, whose option names saving the requirement, implementation, verification, and automatic archival. Think itself stays planning-only until selection; questions and no-change judgments do not offer execution.
+- Use `xsk-write-req` for a saved specification without implementation now. Every shape includes Goal, Scope, and Acceptance; dependency batches are allowed without dropping wanted scope. A finalized standalone requirement offers execution or revision.
+- `xsk-execute-req` accepts an active requirement or a think summary explicitly routed to requirement execution. An inline/direct think selection stays inline, even when an active requirement exists. It saves routed summaries internally through writer, then implements, verifies, reviews with `xsk-check`, and automatically archives on success. One requirement holds a compact `Execution` section; no separate PLAN or run ledger by default. Existing decisions and valid verification are reused. Dirty worktrees, non-Git projects, and unavailable subagents do not block admission.
+- For durable research, use `xsk-point` to save evidence and a confirmed ready conclusion, then select `xsk-consume-point` to incorporate it through writer. Consume preflights the batch, revalidates both source and archive target before each point mutation, and creates new archives without replacing an existing target. Drift leaves the consume incomplete for reconciliation, even if writer already saved the requirement. Complete point archival precedes execution; partial adoption preserves the remainder. Requirement slugs keep provenance resolvable after archival.
+- Use `xsk-check` for existing code, configuration, generated artifacts, or behavioral skill instructions. Independent reviews are read-only; an explicit implementation/repair request covers confirmed in-scope fixes. Review uses the actual Git diff or non-Git file/acceptance evidence and reuses valid checks instead of repeating them.
+- Execution completes only when the current required acceptance and review are satisfied. Incomplete work stays active with remaining steps. A verified implementation whose archival fails retains its evidence and retries only the unfinished archival after checking current state. `xsk-archive-req` also supports explicit manual archival of cancelled or superseded requirements; archived status alone is not completion proof.
+- Internal writer, checker, and archiver calls return to their caller without extra approval menus, recursive execution, or commit offers. User-selected execution authorizes the stated workflow, not Git commits, real installation, pushes, or releases. Archives under `.xsk/requirements/archive/` and `.xsk/points/archive/` are local ignored records unless already tracked; archival does not commit them or make them recoverable from a fresh clone.
 
 ## How it works
 

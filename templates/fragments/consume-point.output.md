@@ -1,1 +1,3 @@
-The path of the produced requirement document (or the existing active doc if appended), plus a summary of which points were archived as `consumed` and which remain active or were dropped.
+Report the actual requirement path and a compact summary of consumed, partially adopted, retained, or explicitly dropped points. On interruption or source/target drift, identify what landed, the point version incorporated, the changed paths, and what needs reconciliation; do not claim the entire batch completed or offer execution while it remains unresolved.
+
+After all selected consumption work is complete, offer execution with `xsk-execute-req` (implement, verify, and automatically archive the requirement on success), or retain/revise the requirement. Reuse an explicit consume-and-execute request instead of asking again. Do not offer execution while a fold or point archival remains incomplete.

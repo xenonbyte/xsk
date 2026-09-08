@@ -52,7 +52,7 @@ test('skill-behavior: no AI-formulaic filler phrases across all skills', () => {
   }
 });
 
-test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, output', () => {
+test('skill-behavior: xsk-think: purpose, triggers, stop-before-approval, output', () => {
   const c = body(skills.find((s) => s.name === 'xsk-think'));
   assert.ok(/decision-complete plan/.test(c), 'purpose stated');
   assert.ok(/出方案/.test(c) && /plan this/.test(c), 'multilingual triggers present');
@@ -70,7 +70,7 @@ test('skill-behavior: xsk-think — purpose, triggers, stop-before-approval, out
 test('skill-behavior: xsk-think: routes only decision-complete work by execution shape', () => {
   const c = body(skills.find((s) => s.name === 'xsk-think'));
   assert.ok(
-    /If any Open Questions remain,[\s\S]*?Do not show execution choices yet/.test(c),
+    /With unresolved \*\*Open Questions\*\*[\s\S]*?Do not show execution choices/.test(c),
     'unresolved questions remain in design without execution choices',
   );
   assert.ok(
@@ -78,7 +78,7 @@ test('skill-behavior: xsk-think: routes only decision-complete work by execution
     'pure judgments stop without execution choices',
   );
   assert.ok(
-    /decision-complete executable plan with no Open Questions[\s\S]*?classify its execution shape/.test(c),
+    /Classify ready work by execution shape[\s\S]*?decision-complete executable plan with no Open Questions/.test(c),
     'only ready executable plans reach execution-shape routing',
   );
   assert.ok(
@@ -90,17 +90,17 @@ test('skill-behavior: xsk-think: routes only decision-complete work by execution
     'file or step count alone does not push work out of direct execution',
   );
   assert.ok(
-    /large, high-risk, cross-session work[\s\S]*?xsk-write-req[\s\S]*?Do not fold that route into direct execution/.test(c),
-    'large or high-risk work routes to a fuller workflow',
+    /Requirement execution[\s\S]*?xsk-execute-req[\s\S]*?Documentation only[\s\S]*?xsk-write-req/.test(c),
+    'complete complex work uses executor while documentation-only intent uses writer',
   );
   assert.ok(
-    /present two user choices: direct execution, or revise the design and remain planning-only/.test(c),
+    /exactly two numbered choices[\s\S]*?direct execution, or revise the design/.test(c),
     'ready work presents both next actions',
   );
-  assert.ok(/Label one choice as recommended/.test(c), 'routing labels a shape-based recommendation');
+  assert.ok(/mark one choice as recommended/.test(c), 'routing labels a shape-based recommendation');
   assert.ok(/\*\*Next Action\*\*/.test(c), 'output names the next-action section');
   assert.ok(
-    /Offer choices only\. Never invoke another skill automatically, and never begin implementing on the strength of a recommendation the user has not picked/.test(c),
+    /Never invoke another skill automatically, and never begin implementing on the strength of a recommendation the user has not picked/.test(c),
     'a recommendation is never self-approval to start implementing',
   );
   assert.ok(
@@ -108,9 +108,26 @@ test('skill-behavior: xsk-think: routes only decision-complete work by execution
     'planning-only holds: direct execution runs outside this skill',
   );
   assert.ok(
-    /What you are waiting for follows the routing below: answers to Open Questions, nothing at all after a pure judgment, or a next-action selection/.test(c),
+    /A pure judgment needs no approval; Open Questions wait for answers instead of an execution selection/.test(c),
     'the stop condition matches the routed outcome instead of always awaiting approval',
   );
+  assert.ok(/actual changes and verification/.test(c), 'execution choice carries a concrete scope');
+  assert.ok(/option number or an unambiguous natural-language selection/.test(c), 'supports short selections');
+  assert.ok(/without another approval round for the same scope/.test(c), 'selection authorizes the stated work');
+  assert.ok(/not additional public or external actions/.test(c), 'execution selection does not expand permission');
+});
+
+test('skill-behavior: xsk-think: proportional plans include acceptance without speculative complexity', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-think'));
+  assert.ok(/lightweight plan uses the single paragraph/.test(c), 'lightweight output stays short');
+  assert.ok(/omit empty or generic risk sections/.test(c), 'does not force filler risk tables');
+  assert.ok(/scope boundaries/.test(c) && /observable acceptance checks/.test(c), 'handoff includes scope and acceptance');
+  assert.ok(/routine naming and local implementation details[\s\S]*?do not require separate user decisions/.test(c),
+    'routine implementation choices do not block handoff');
+  assert.ok(/specific failure mode/.test(c) && /no demonstrated benefit, shrink the plan/.test(c),
+    'extra complexity needs a concrete benefit');
+  assert.ok(/Skip this comparison when the recommendation already uses the minimal approach/.test(c),
+    'minimal plans do not acquire extra comparison gates');
 });
 
 test('skill-behavior: xsk-bypass-claude — settings.local.json only, Claude-only refusal, malformed-file refusal', () => {
@@ -148,90 +165,51 @@ test('skill-behavior: xsk-skill-scaffold — gate, audit, propose, apply; refuse
   assert.ok(/项目规范化/.test(c), 'multilingual triggers');
 });
 
-test('skill-behavior: xsk-write-req — grounded, asks on decisions, self-audit, no em/en dash', () => {
+test('skill-behavior: xsk-write-req: identity, full scope, acceptance, and nested return', () => {
   const c = body(skills.find((s) => s.name === 'xsk-write-req'));
-  assert.ok(/Read the project first/.test(c), 'grounds in the project');
-  assert.ok(/There is \*\*at most one\*\* active doc at a time/.test(c), 'retains the single-active invariant');
-  assert.ok(/If more than one exists, stop/.test(c), 'stops when more than one active doc exists');
-  assert.ok(/list the offending paths/i.test(c), 'lists offending active-doc paths');
-  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
-  assert.ok(/user to resolve/i.test(c), 'leaves resolution to the user');
-  assert.ok(!/multi-active workflow/i.test(c), 'does not introduce a multi-active workflow');
-  assert.ok(!/auto-resolution/i.test(c), 'does not introduce auto-resolution');
-  assert.ok(/decision points go to the user/i.test(c), 'asks user on decisions');
-  assert.ok(/Self-audit checkpoint/.test(c), 'self-audit checkpoint');
-  assert.ok(/Conflict check/.test(c) && /Ambiguity check/.test(c), 'conflict + ambiguity checks');
-  // No-dropped-content rule: deferred requirement content has no home (no backlog, single active
-  // doc), so the doc must capture the full need rather than parking content as later/phase 2.
-  assert.ok(/Completeness check/.test(c), 'self-audit includes a completeness check');
-  assert.ok(/has no backlog/.test(c) && /lost when the doc is archived/.test(c),
-    'states deferred content has no home and is lost on archive');
-  assert.ok(/Do not split the need into now-versus-later/.test(c),
-    'forbids splitting the need into now-versus-later');
-  assert.ok(/no deferred requirement content/.test(c),
-    'audit loop gates on zero deferred requirement content');
-  // The completeness check flags a Scope-out entry only when it carries wanted work, so a genuine
-  // non-goal boundary (allowed by step 4) is not flagged as dropped content.
-  assert.ok(/a Scope-out entry that is really wanted work rather than a genuine non-goal/.test(c),
-    'completeness check flags Scope-out only when it carries wanted work, not genuine non-goals');
-  assert.ok(/写需求/.test(c) && /write a requirement/i.test(c), 'multilingual triggers');
-  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the commit offer on a git repo');
-  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing');
-  assert.ok(/Track `\.xsk\/\.gitignore` as a path this run wrote when this step created it or appended the missing line/.test(c),
-    'tracks .xsk/.gitignore when the archive rule is appended');
-  assert.ok(/Build the commit path set from every path this run wrote: the requirement doc, plus `\.xsk\/\.gitignore` if step 3 created it or appended the missing line/.test(c),
-    'write-req skip condition uses the full commit path set');
-  // Pins the exact safe command: `git add` first (a bare `git commit -- <path>` rejects an
-  // untracked new doc), then a path-limited commit so unrelated changes are never swept in.
-  assert.ok(
-    /git add -- <those paths> && git commit -m "docs\(xsk\): write requirement <slug>" -- <those paths>/.test(c),
-    'stages explicit paths then path-limits the commit (works on a new untracked doc)',
-  );
-  assert.ok(!/\u2014/.test(c), 'no em-dash');
-  assert.ok(!/\u2013/.test(c), 'no en-dash');
+  assert.ok(/Read the project first/.test(c), 'grounds the requirement');
+  assert.ok(/at most one/.test(c) && /list the offending paths/.test(c), 'keeps one active requirement');
+  assert.ok(/goal and scope match/.test(c) && /Never silently merge unrelated work/.test(c), 'does not absorb a different need');
+  assert.ok(/active and archive paths/.test(c) && /reuse a historical slug/.test(c), 'preserves unique document identity');
+  assert.ok(/Every shape has Goal, Scope, and Acceptance/.test(c), 'all requirement shapes are executable');
+  assert.ok(/Dependency ordering and implementation batches are allowed/.test(c), 'ordered work is not rejected');
+  assert.ok(/all wanted work still in scope/.test(c), 'batches cannot silently drop scope');
+  assert.ok(/Self-audit checkpoint/.test(c) && /Conflict check/.test(c) && /Ambiguity check/.test(c), 'keeps meaningful audit');
+  assert.ok(/autonomous tests or self-audits/.test(c), 'checkpoints do not imply user gates');
+  assert.ok(/mark affected execution results for revalidation/.test(c), 'changed requirements invalidate completion');
+  assert.ok(/suppress commit offers and next-action menus/.test(c) && /do not invoke execution recursively/.test(c), 'nested writer returns without a loop');
+  assert.ok(/xsk-execute-req/.test(c) && /already authorized writing and execution together/.test(c), 'standalone handoff reuses authorization');
 });
 
-test('skill-behavior: xsk-archive-req — validates slug, stops on collision, writes before remove', () => {
+test('skill-behavior: document skills: commit authority and same-file edits are preserved', () => {
+  for (const name of ['xsk-write-req', 'xsk-point', 'xsk-consume-point', 'xsk-archive-req']) {
+    const c = body(skills.find((s) => s.name === name));
+    assert.ok(/explicitly requested|explicit request/.test(c), name + ' commits require authorization');
+    assert.ok(/pre-existing|same-file/.test(c), name + ' protects existing edits within selected paths');
+    assert.ok(/git add -A/.test(c) && /git add \./.test(c), name + ' explicitly rejects broad staging');
+    assert.ok(/already tracked|already be tracked|actual Git tracking/.test(c), name + ' does not confuse ignored and untracked');
+  }
+});
+
+test('skill-behavior: xsk-archive-req: exact target and recoverable write-before-remove', () => {
   const c = body(skills.find((s) => s.name === 'xsk-archive-req'));
-  assert.ok(/status: active/.test(c), 'scans for status: active');
-  assert.ok(/single document whose frontmatter has `status: active`/.test(c), 'retains the single-active language');
-  assert.ok(/If more than one exists, stop/.test(c), 'stops when more than one active doc exists');
-  assert.ok(/list the offending paths/i.test(c), 'lists offending active-doc paths');
-  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
-  assert.ok(/user to resolve/i.test(c), 'leaves resolution to the user');
-  assert.ok(!/multi-active workflow/i.test(c), 'does not introduce a multi-active workflow');
-  assert.ok(!/auto-resolution/i.test(c), 'does not introduce auto-resolution');
-  assert.ok(/\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$/.test(c), 'pins the slug validation regex');
-  assert.ok(/missing\/invalid slug/i.test(c), 'refuses a missing or invalid slug');
-  assert.ok(/before any write/i.test(c), 'invalid slug stops before any write');
-  assert.ok(/\.xsk\/requirements\/archive\/<slug>\.md/.test(c), 'uses the archive target path');
-  assert.ok(/already exists/i.test(c), 'detects archive collisions');
-  assert.ok(/ask the user/i.test(c), 'collision path asks the user');
-  assert.ok(/writing nothing/i.test(c), 'collision path does not write');
-  assert.ok(/status: archived/.test(c), 'sets status: archived');
-  assert.ok(/archived_at/.test(c), 'adds archived_at');
-  assert.ok(/\.xsk\/requirements\/archive\//.test(c), 'moves to .xsk/requirements/archive/');
-  assert.ok(/归档需求/.test(c) && /archive requirement/i.test(c), 'multilingual triggers');
-  assert.ok(/refuse/i.test(c), 'refuses when there is nothing to archive');
-  assert.ok(/confirm it landed/i.test(c), 'confirms the archive write landed');
-  assert.ok(/remove the source active doc/i.test(c), 'removes the source only after the archive write');
-  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks whether the active doc was git-tracked');
-  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing the archival');
-  assert.ok(
-    /git add -- <the removed active doc path> && git commit -m "docs\(xsk\): archive requirement <slug>" -- <the removed active doc path>/.test(c),
-    'stages the deletion then path-limits the commit',
-  );
-
-  const collisionIndex = c.search(/already exists/i);
-  const writeIndex = c.search(/write the fully-updated archived content/i);
-  const removeIndex = c.search(/remove the source active doc/i);
-  assert.ok(collisionIndex >= 0 && writeIndex >= 0 && collisionIndex < writeIndex,
-    'checks collision before writing the archive');
-  assert.ok(writeIndex >= 0 && removeIndex >= 0 && writeIndex < removeIndex,
-    'writes and confirms the archive before removing the source');
+  assert.ok(/status: active/.test(c) && /list the offending paths/.test(c), 'single active invariant');
+  assert.ok(/Honor an explicit slug\/path/.test(c) && /never substitute a different active doc/.test(c), 'binds exact target');
+  assert.ok(/\^\[a-z0-9\]\+\(-\[a-z0-9\]\+\)\*\$/.test(c), 'slug syntax is fixed');
+  assert.ok(/entire body and other frontmatter match/.test(c), 'retry requires equivalent content');
+  assert.ok(/Reuse the existing archived_at/.test(c), 'retry preserves archive timestamp');
+  assert.ok(/New or unimplemented content must not be archived/.test(c), 'does not archive new scope');
+  assert.ok(/archived.*not proof of implementation completion/.test(c), 'manual archive is not completion proof');
+  const write = c.indexOf('Write the fully-updated archived content');
+  const verify = c.indexOf('Confirm it landed as written');
+  const remove = c.indexOf('then remove the source active doc');
+  assert.ok(write >= 0 && verify > write && remove > verify, 'verified copy precedes removal');
+  assert.ok(/re-read the source and confirm it has not changed/.test(c), 'changed source is retained');
+  assert.ok(/suppress commit offers and next-action menus/.test(c), 'returns to executor without another gate');
+  assert.ok(/local records.*fresh clone/.test(c), 'does not overclaim archive persistence');
 });
 
-test('skill-behavior: xsk-check — review-only diff scope, hard stops, evidence gate, verify, stop', () => {
+test('skill-behavior: xsk-check: review-only diff scope, hard stops, evidence gate, verify, stop', () => {
   const c = body(skills.find((s) => s.name === 'xsk-check'));
   assert.ok(
     /identify and report what is safe to fix/.test(c),
@@ -240,9 +218,9 @@ test('skill-behavior: xsk-check — review-only diff scope, hard stops, evidence
   assert.ok(!/fix what is safe to fix/.test(c), 'purpose does not contradict review-only behavior');
   assert.ok(/scope drift/i.test(c), 'checks scope drift');
   assert.ok(/hard stops/i.test(c), 'applies hard stops');
-  assert.ok(/HIGH or CRITICAL/.test(c) && /exact file and line/.test(c), 'evidence-gated findings');
+  assert.ok(/Every formal finding needs the exact file and line/.test(c), 'evidence applies to all formal findings');
   assert.ok(/inherited stdio/.test(c), 'carries the captured-output hard stop (A+ distillation)');
-  assert.ok(/regression test/.test(c), 'requires a regression test for bug fixes');
+  assert.ok(/regression check/.test(c), 'requires meaningful regression evidence for bug fixes');
   assert.ok(
     /审查这次改动/.test(c) && /看一下这个 diff/.test(c) && /评审这个 PR/.test(c) && /合并前检查/.test(c),
     'Chinese triggers are scoped to an existing change',
@@ -259,95 +237,125 @@ test('skill-behavior: xsk-check — review-only diff scope, hard stops, evidence
   );
   assert.ok(/Do not merge, push/.test(c), 'stops without merging or pushing');
   assert.ok(/Review-only by default/.test(c), 'defaults to review-only');
-  assert.ok(/Do not modify files during a review/.test(c), 'does not edit files during a review');
-  assert.ok(/apply them only when the user explicitly asks/i.test(c), 'applies mechanical fixes only on explicit request');
+  assert.ok(/Do not modify files for a review-only request/.test(c), 'does not edit files during a review');
+  assert.ok(/already authorized repairs[\s\S]*?all confirmed fixes within that scope/.test(c),
+    'repairs require authorization and cover the confirmed scope');
+  assert.ok(/without asking again for each fix/.test(c), 'authorized repairs do not require repeated confirmation');
+  assert.ok(/Ask only about scope expansion or unresolved decisions with material consequences/.test(c),
+    'new scope and consequential decisions remain with the user');
   assert.ok(!/persona-catalog|check-update|🥷|\.\.\//.test(c), 'no Waza-internal references');
 });
 
-test('skill-behavior: xsk-point: grounds first, decision-complete plan, persists to .xsk/points/', () => {
-  const c = body(skills.find((s) => s.name === 'xsk-point'));
-  assert.ok(/Research one aspect/.test(c), 'purpose stated');
-  assert.ok(/decision-complete/.test(c), 'decision-complete requirement');
-  assert.ok(/\.xsk\/points\//.test(c), 'persists to .xsk/points/');
-  assert.ok(/status: researching/.test(c), 'uses status: researching');
-  assert.ok(/status: ready/.test(c), 'promotes to status: ready');
-  assert.ok(/status: dropped/.test(c), 'uses status: dropped on drop');
-  assert.ok(/write-before-remove/.test(c), 'write-before-remove on drop');
-  assert.ok(/研究一下/.test(c) && /spike this/.test(c), 'multilingual triggers');
-  assert.ok(/\.xsk\/points\/archive\//.test(c), 'archives dropped points');
-  assert.ok(/already exists/i.test(c), 'detects an archive collision on drop');
-  assert.ok(/writing nothing/i.test(c), 'collision path writes nothing');
-  // Persist-path commit offer mirrors xsk-write-req: git-gated, asks once, then a
-  // staged path-limited commit so a new untracked doc commits and nothing else is swept in.
-  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the commit offer on a git repo');
-  assert.ok(/ask the user once whether to commit/i.test(c), 'asks once before committing');
-  assert.ok(/Build the commit path set from every path this run wrote: the point document, plus `\.xsk\/\.gitignore` if step 5 created it or appended the missing line/.test(c),
-    'point skip condition uses the full commit path set');
-  assert.ok(
-    /git add -- <those paths> && git commit -m "docs\(xsk\): research point <slug>" -- <those paths>/.test(c),
-    'stages explicit paths then path-limits the commit (works on a new untracked doc)');
-  // Drop-path commit offer uses the same path-set discipline: tracked source deletion plus
-  // any .xsk/.gitignore change needed to keep archive copies ignored.
-  assert.ok(/Build the drop commit path set from the recordable paths this run touched: the removed point source if git was tracking it, plus `\.xsk\/\.gitignore` if step 5 created it or appended the missing `points\/archive\/` line/.test(c),
-    'drop commit includes .xsk/.gitignore when the archive ignore rule was created or appended');
-  assert.ok(/intentionally not part of the drop commit path set/.test(c),
-    'drop commit does not include ignored archive copies');
-  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks the dropped point was tracked');
-  assert.ok(
-    /git add -- <those paths> && git commit -m "docs\(xsk\): drop point <slug>" -- <those paths>/.test(c),
-    'stages the deletion then path-limits the drop commit');
-  // Stop at the document: research-and-persist only, never proposes or begins code.
-  assert.ok(/only deliverable/i.test(c), 'point doc is the only deliverable');
-  assert.ok(/begin any code change/i.test(c), 'does not begin code changes');
+test('skill-behavior: xsk-check: prevents unsupported identifier and migration conclusions', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-check'));
+  assert.ok(/Distinguish new definitions from references/.test(c), 'new definitions are not missing dependencies');
+  assert.ok(/imports, exports, dependency APIs/.test(c) && /dynamic lookups/.test(c), 'traces symbol resolution');
+  assert.ok(!/No match outside the diff means it does not exist/.test(c), 'does not reject valid diff-local definitions');
+  assert.ok(/relevant release history, supported upgrade origins, and the persistent-data contract/.test(c),
+    'migration decisions consider supported historical data');
+  assert.ok(/Absence from the last release tag does not prove it never shipped/.test(c),
+    'latest-tag absence is not proof of no migration need');
+  assert.ok(!/if it is absent there, no migration is needed/.test(c), 'does not infer never-shipped from one tag');
 });
 
-test('skill-behavior: xsk-consume-point: scans ready points, guards single-active req, hands off to xsk-write-req, archives consumed', () => {
+test('skill-behavior: xsk-check: bounds findings and verification to the reviewed state', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-check'));
+  assert.ok(/skill instructions that affect behavior/.test(c), 'behavioral instruction changes are reviewable');
+  assert.ok(/baseline or commit range/.test(c) && /staged, unstaged, and untracked/.test(c), 'reports review coverage');
+  assert.ok(/Set severity from impact, not confidence/.test(c), 'uncertainty does not set severity');
+  assert.ok(/unconfirmed concerns separate/.test(c) && /do not turn them into facts by lowering their severity/.test(c),
+    'uncertain concerns remain separate from confirmed findings');
+  assert.ok(/findings share a root cause/.test(c) && /Honor a settled direction unless new evidence contradicts it/.test(c),
+    'approach review is conditional and respects settled decisions');
+  assert.ok(/invalidate earlier evidence[\s\S]*?rerun the relevant checks/.test(c), 'refreshes invalidated evidence');
+  assert.ok(/skipped checks and reasons, and layers still untested/.test(c), 'sign-off exposes verification gaps');
+  assert.ok(/In a non-Git project/.test(c) && /do not invent a baseline/.test(c), 'supports scoped non-Git review');
+  assert.ok(/Reuse valid verification/.test(c) && /return findings, repairs, and verification evidence to the executor/.test(c), 'nested review shares evidence and returns');
+});
+
+test('skill-behavior: xsk-point: useful research, confirmation, identity, and next action', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-point'));
+  assert.ok(/Research one aspect/.test(c) && /xsk-think/.test(c), 'research purpose and discipline');
+  assert.ok(/different aspect needs a distinct unused slug/.test(c), 'does not overwrite collisions');
+  assert.ok(/status: researching/.test(c) && /need not prevent saving useful research/.test(c), 'can persist unresolved research');
+  assert.ok(/status: ready/.test(c) && /user confirms that conclusion/.test(c), 'ready requires a confirmed conclusion');
+  assert.ok(/approval to commit is not approval of a conclusion/.test(c), 'commit and conclusion authority differ');
+  assert.ok(/no change, keep the current behavior/.test(c), 'no-change conclusions are valid');
+  assert.ok(/not age or HEAD changes alone/.test(c), 'freshness checks are relevant');
+  assert.ok(/status: dropped/.test(c) && /write-before-remove/.test(c), 'drop remains recoverable');
+  assert.ok(/xsk-consume-point/.test(c) && /retain the point/.test(c), 'ready points offer useful routing');
+  assert.ok(/Never invoke think's executor route from inside point/.test(c), 'research does not dispatch code');
+});
+
+test('skill-behavior: xsk-consume-point: batch preflight, adoption, and stable provenance', () => {
   const c = body(skills.find((s) => s.name === 'xsk-consume-point'));
-  assert.ok(/\.xsk\/points\//.test(c), 'reads from .xsk/points/');
-  assert.ok(/no unarchived point has `status: ready`/.test(c), 'stops when no ready point exists');
-  assert.ok(/Only points with `status: ready` may be selected/.test(c), 'limits selection to ready points');
-  assert.ok(/researching` or otherwise non-ready point, stop without writing or archiving/.test(c),
-    'blocks selecting researching points');
-  assert.ok(!/status: researching` may be selected/.test(c), 'does not allow researching points to be selected');
-  assert.ok(/re-read each selected point and confirm `status: ready`/.test(c), 'rechecks readiness before handoff');
-  assert.ok(/xsk-write-req/.test(c), 'hands off to xsk-write-req');
-  assert.ok(/single-active requirement/.test(c), 'guards the single-active requirement');
-  assert.ok(/list the offending paths/i.test(c), 'lists offending paths');
-  assert.ok(/broken invariant/i.test(c), 'reports the broken invariant');
-  assert.ok(/status: consumed/.test(c), 'archives folded points as consumed');
-  assert.ok(/write-before-remove/.test(c), 'write-before-remove when archiving');
-  assert.ok(/consumed_at/.test(c), 'adds consumed_at to frontmatter');
-  assert.ok(/already exists/i.test(c), 'detects an archive collision before overwriting');
-  assert.ok(/rather than overwriting/i.test(c), 'does not overwrite an existing consumed archive');
-  assert.ok(/ensure `\.xsk\/\.gitignore` contains the line `points\/archive\/`/.test(c),
-    'ensures consumed archive copies are ignored before writing them');
-  assert.ok(/把这些 point 变成需求/.test(c) && /consume points/.test(c), 'multilingual triggers');
-  // One combined commit owns the whole fold: write-req's inline offer is suppressed during
-  // the handoff, and consume-point commits the requirement doc plus the consumed-point removals.
-  assert.ok(/suppress its commit offer/.test(c), 'suppresses xsk-write-req inline commit offer');
-  assert.ok(/git rev-parse --is-inside-work-tree/.test(c), 'gates the consume commit on a git repo');
-  assert.ok(/plus `\.xsk\/\.gitignore` if the suppressed `xsk-write-req` handoff created it or appended `requirements\/archive\/`/.test(c),
-    'consume commit includes .xsk/.gitignore when the handoff creates or appends it');
-  assert.ok(/or step 5 created it or appended `points\/archive\/`/.test(c),
-    'consume commit includes .xsk/.gitignore when consumed archive ignore is created or appended');
-  assert.ok(/Build the commit path set from the recordable paths this run touched/.test(c),
-    'consume skip condition uses the full commit path set');
-  assert.ok(/Do not include `\.xsk\/points\/archive\/<slug>\.md` archive copies in the commit path set/.test(c),
-    'consume commit leaves ignored archive copies out of the path set');
-  assert.ok(
-    /git add -- <those paths> && git commit -m "docs\(xsk\): consume points into requirement <slug>" -- <those paths>/.test(c),
-    'one combined commit stages explicit paths then path-limits the commit');
-  // Guards the pathspec trap: a consumed point git never tracked is now deleted, so listing it
-  // in `git add` would fail on an unmatched pathspec and abort the whole commit. Filter to tracked.
-  assert.ok(/each removed `\.xsk\/points\/<slug>\.md` that git was tracking/.test(c),
-    'combined consume commit includes only the removed points git was tracking');
-  // Drop-rejected path mirrors xsk-point's drop commit offer.
-  assert.ok(/build the drop commit path set from the removed source point if git was tracking it, plus `\.xsk\/\.gitignore` if this run created it or appended the missing `points\/archive\/` line/.test(c),
-    'consume-rejected drop includes .xsk/.gitignore when the archive ignore rule was created or appended');
-  assert.ok(/git ls-files --error-unmatch/.test(c), 'checks a dropped point was tracked');
-  assert.ok(
-    /git add -- <those paths> && git commit -m "docs\(xsk\): drop point <slug>" -- <those paths>/.test(c),
-    'stages the deletion then path-limits the drop commit');
+  assert.ok(/Respect explicitly selected slugs/.test(c), 'does not ask twice for named inputs');
+  assert.ok(/Only points with `status: ready` may be selected/.test(c), 'requires ready sources');
+  assert.ok(/single-active requirement/.test(c) && /before any write/.test(c), 'guards target before mutation');
+  const preflight = c.indexOf('Preflight the whole batch');
+  const writer = c.indexOf('Hand off once to xsk-write-req');
+  assert.ok(preflight >= 0 && writer > preflight, 'preflights every source/target before writer');
+  assert.ok(/contradictory conclusions/.test(c) && /do not add unselected dependencies silently/.test(c), 'resolves conflicting and missing inputs');
+  assert.ok(/Partial adoption leaves the source active/.test(c), 'partial use cannot consume the entire point');
+  assert.ok(/consumed_by: <requirement-slug>/.test(c) && /older consumed_by path values/.test(c), 'references survive requirement archival');
+  assert.ok(/write-before-remove/.test(c) && /re-read both source and archive before removal/.test(c), 'verifies both files before removal');
+  assert.ok(/instead of appending it twice/.test(c), 'retry reconciles content');
+  assert.ok(/do not require those archived sources to be ready again/.test(c), 'completed retry sources do not fail the readiness gate');
+  assert.ok(/suppress its commit offer and next-action menu/i.test(c), 'writer yields control');
+  assert.ok(/Complete every selected fold and its applicable archival before offering or entering execution/.test(c), 'execution waits for full consumption');
+});
+
+test('skill-behavior: xsk-consume-point: refreshes source and target after nested writer', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-consume-point'));
+  assert.match(c, /source snapshot.*archive target's observed state/, 'retains the inputs used by writer');
+  assert.match(c, /Before each partial source edit, drop, or archive write, re-read both the source and archive target/,
+    'every mutation branch refreshes both paths after the handoff');
+  assert.match(c, /If either differs.*stop.*reconciliation/, 'drift prevents writes from stale input');
+  assert.match(c, /create-only.*no-clobber/, 'new archives cannot replace a concurrently created target');
+  assert.match(c, /reuse it without rewriting/, 'matching retry archives are not rewritten');
+  assert.match(c, /re-read both source and archive before removal/, 'deletion still requires a valid archive');
+});
+
+test('skill-behavior: xsk-execute-req: discovery and intake preserve inline think execution', () => {
+  const skill = skills.find((s) => s.name === 'xsk-execute-req');
+  const c = body(skill);
+  assert.match(skill.description, /think plan explicitly routed to xsk-execute-req/, 'discovery requires the requirement route');
+  assert.match(c, /explicitly selected requirement-execution route/, 'triggers bind the selected route');
+  assert.doesNotMatch(c, /selecting the execution option of a complete think plan|"execute the approved plan"/,
+    'generic think execution is not an executor cue');
+  assert.match(c, /inline\/direct execution.*normal conversation/, 'inline selection returns to normal execution');
+  const route = c.indexOf('Honor the selected think route');
+  const lookup = c.indexOf('Accept an explicit requirement');
+  assert.ok(route >= 0 && lookup > route, 'route check precedes even active-requirement lookup');
+  assert.match(c, /explicit invocation of `xsk-execute-req` selects the requirement workflow/,
+    'intentional executor invocation remains supported');
+});
+
+test('skill-behavior: xsk-execute-req: two inputs with one requirement and scoped authority', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-req'));
+  assert.ok(/explicit requirement slug\/path/.test(c) && /think summary selected for execution/.test(c), 'accepts both approved inputs');
+  assert.ok(/save it before implementation/.test(c), 'summary is persisted without a separate planning step');
+  assert.ok(/goal and scope match the selected work/.test(c), 'does not execute additional old scope');
+  assert.ok(/matching filename and frontmatter inside the requirement store/.test(c), 'validates existing target identity before implementation');
+  assert.ok(/same doc/.test(c) && /in_progress.*blocked.*completed/.test(c), 'compact execution state belongs to the requirement');
+  assert.ok(/separate PLAN only when/.test(c), 'PLAN is optional');
+  assert.ok(/dirty worktree, a non-Git project, or unavailable subagents is not an admission failure/.test(c), 'avoids unnecessary entry gates');
+  assert.ok(/suppress commit offers and next-action menus/.test(c), 'internal writer returns');
+  assert.ok(/xsk-check/.test(c) && /xsk-archive-req/.test(c), 'required handoff names resolve');
+});
+
+test('skill-behavior: xsk-execute-req: evidence reuse, incomplete work, and archival recovery', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-req'));
+  assert.ok(/Do not rerun unchanged checks/.test(c), 'skill changes do not duplicate verification');
+  assert.ok(/compare current Goal, Scope, Acceptance/.test(c), 'resume is tied to current requirements');
+  assert.ok(/historical evidence/.test(c), 'historical checks are not represented as fresh');
+  assert.ok(/Required `fail` or `not_run` evidence leaves it active and incomplete/.test(c), 'required gaps prevent false completion');
+  const complete = c.indexOf('Save `State: completed`');
+  const archive = c.indexOf('then invoke `xsk-archive-req`');
+  assert.ok(complete >= 0 && archive > complete, 'records completion before archival');
+  assert.ok(/automatic archival without another approval/.test(c), 'successful execution includes archival');
+  assert.ok(/Retry only persistence\/archival/.test(c), 'archive retry does not repeat implementation');
+  assert.ok(/already archived, return its saved result/.test(c), 'completed reentry does not create a duplicate');
 });
 
 test('skill-behavior: every skill carries name + description frontmatter and a stop point', () => {
