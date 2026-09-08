@@ -58,7 +58,9 @@ Only while needed: the unresolved decision and what answer is required.
 
 **4. Keep archive conventions.** Ensure `.xsk/.gitignore` contains `points/archive/`: create if absent, otherwise append only the missing line. Preserve existing rules and record changed paths. This does not untrack already tracked archives.
 
-**5. Drop only when authorized.** A direct request to discard this point is sufficient confirmation; do not ask twice. Without that authorization, keep it active. Before writes, validate identity and check the archive target. Set `status: dropped`, `dropped_at`, and a short `dropped_reason`. If a target already exists, resume only when its body and other fields match the source and requested drop, allowing only the expected status/drop metadata changes; reuse its timestamp. On conflict preserve both files, writing nothing, and ask about the conflict. Use write-before-remove: write the archive, verify it landed, re-read the source to ensure its content has not changed, then remove it. A changed source remains active for reconciliation.
+**5. Drop only when authorized.** A direct request to discard this point is sufficient confirmation; do not ask twice. Without that authorization, keep it active. Before writes, validate identity and check the archive target. Set `status: dropped`, `dropped_at`, and a short `dropped_reason`. If a target already exists, resume only when its body and other fields match the source and requested drop, allowing only the expected status/drop metadata changes; reuse its timestamp and content without rewriting. On conflict preserve both files, writing nothing, and ask about the conflict.
+
+Use write-before-remove. Revalidate source and archive target immediately before publication. For an absent target, use create-only publication with no-clobber semantics; an existence check followed by an overwriting write or rename is insufficient. If creation loses a race, preserve the source and winning target and stop. Verify the archive landed, then re-read both source and archive and compare them with the content prepared for the authorized drop before removing the source. If either file changed, keep the source active for reconciliation. A verified matching retry copy only needs the unfinished removal.
 
 **6. Stop at the document.** The point document is the only deliverable; do not begin any code change or requirement write without the selected next action. Ready output may offer `xsk-consume-point` or retain the point; researching output names the unresolved question. Never invoke think's executor route from inside point.
 
@@ -74,5 +76,5 @@ For ready work, offer two next actions: integrate with `xsk-consume-point`, or r
 
 - Triggers are matched by intent, not by exact wording. The phrases listed under "When to use" are cues, not a required incantation.
 - Write in natural, direct prose. No formulaic openers, no filler conclusions, no restating the request before you answer it.
-- When a decision would change the implementation, surface it as a short question and let the user decide. Do not pick silently.
+- Resolve consequential decisions from existing context and authorization. Ask only about unresolved choices affecting goals, behavior, interfaces, scope, or material cost. Routine local implementation choices follow project evidence; do not ask again for work already authorized.
 - These are instruction skills. They shape how work is approached, not what the agent is technically capable of.

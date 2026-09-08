@@ -133,8 +133,10 @@ test('uninstall: manifest removal failure is reported as partial', () => {
   assert.strictEqual(res.exitCode, PARTIAL_EXIT, 'manifest removal failure is not success');
   assert.strictEqual(res.partial, true);
   assert.match(res.error, /manifest removal failed|simulated manifest removal failure/i);
-  assert.ok(!fs.existsSync(skillFile), 'generated file was already removed');
-  assert.ok(fs.existsSync(mf), 'stale manifest remains visible for retry/status');
+  assert.ok(fs.existsSync(skillFile), 'generated file restored with the unchanged manifest');
+  assert.ok(fs.existsSync(mf), 'prior manifest remains valid for retry/status');
+  assert.deepStrictEqual(res.removed, [], 'undone removals are not reported');
+  assert.strictEqual(uninstallOnePlatform(sb).exitCode, 0, 'retry completes after the fault clears');
 });
 
 test('uninstall: narrowed manifest write failure is partial and rolls back prior removals', () => {

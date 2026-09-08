@@ -20,9 +20,11 @@ Commands:
                                uninstall needed). --platform is comma-separated,
                                defaults to all four platforms.
   uninstall [--platform <list>] Remove only the manifest-recorded generated files.
-  status [--json]               Read-only per-platform report: ok, drift, invalid,
+  status [--platform <list>] [--json]
+                               Read-only per-platform report: ok, drift, invalid,
                                or not-installed.
-  doctor [--json]               Probe Node version, target-dir writability, and
+  doctor [--platform <list>] [--json]
+                               Probe Node version, target-dir writability, and
                                manifest validity. Pass/fail per check.
   version                       Print the xsk version (also --version / -v).
   help                          Print this help (also --help / -h, and on no args).
@@ -79,7 +81,7 @@ function formatUninstall(summary) {
       line += `, restored ${restoredCount} displaced file${restoredCount === 1 ? '' : 's'}`;
     }
     if (r.partial) {
-      line += `; retained ${retainedCount} user-edited file${retainedCount === 1 ? '' : 's'} (partial)`;
+      line += `; retained ${retainedCount} file${retainedCount === 1 ? '' : 's'} (partial)`;
     }
     if ((r.skipped || []).length) {
       line += `; skipped ${(r.skipped || []).length} unowned dir(s)`;

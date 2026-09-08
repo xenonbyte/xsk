@@ -10,7 +10,8 @@
 //   3. Triggers are cues, not a required incantation (stated explicitly).
 //   4. Stop behavior is unambiguous: the skill halts at a named point.
 //   5. No internal/Waza reference paths, no ../../, no update scripts.
-//   6. Decisions that change implementation surface a question to the user.
+//   6. Ask about consequential unresolved choices; reuse existing authorization
+//      and resolve routine local choices from project evidence.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -140,6 +141,10 @@ test('skill-behavior: xsk-bypass-claude — settings.local.json only, Claude-onl
   assert.ok(/invalid JSON/i.test(c) && /not a JSON object/i.test(c), 'refuses malformed or non-object JSON');
   assert.ok(/跳过权限/.test(c) && /bypass permissions/i.test(c), 'multilingual triggers');
   assert.ok(/idempotent/i.test(c), 'idempotent no-op stated');
+  assert.ok(/permissions.*exists but is null, an array, or any other non-object/.test(c), 'malformed permissions are not silently replaced');
+  assert.ok(/missing.*permissions.*field may be created as an object/.test(c), 'absent permissions are supported');
+  assert.ok(/preserves existing indentation, newline style, key order, and unrelated formatting/.test(c), 'existing file formatting is preserved');
+  assert.ok(/2-space default applies only to a new file/.test(c), 'new-file formatting does not reformat existing settings');
   assert.ok(/Report only the path written/i.test(c), 'limits report to the written path');
   assert.ok(!/resulting JSON|full JSON/i.test(c), 'does not ask agents to print full settings JSON');
   assert.ok(!/writing `?\.claude\/settings\.json`?/i.test(c), 'does not instruct writing .claude/settings.json');
@@ -205,8 +210,39 @@ test('skill-behavior: xsk-archive-req: exact target and recoverable write-before
   const remove = c.indexOf('then remove the source active doc');
   assert.ok(write >= 0 && verify > write && remove > verify, 'verified copy precedes removal');
   assert.ok(/re-read the source and confirm it has not changed/.test(c), 'changed source is retained');
+  assert.ok(/re-read the archive to confirm it still matches/.test(c), 'archive drift before source removal is detected');
   assert.ok(/suppress commit offers and next-action menus/.test(c), 'returns to executor without another gate');
   assert.ok(/local records.*fresh clone/.test(c), 'does not overclaim archive persistence');
+});
+
+test('skill-behavior: shared questions respect settled authorization and routine choices', () => {
+  for (const s of skills) {
+    const c = body(s);
+    assert.ok(/Ask only about unresolved choices affecting goals, behavior, interfaces, scope, or material cost/.test(c), s.name + ' bounds user decisions');
+    assert.ok(/Routine local implementation choices follow project evidence/.test(c), s.name + ' permits routine choices');
+    assert.ok(/do not ask again for work already authorized/.test(c), s.name + ' reuses authorization');
+    assert.ok(!/When a decision would change the implementation, surface it as a short question/.test(c), s.name + ' has no blanket question rule');
+  }
+});
+
+test('skill-behavior: archive and point drop preserve racing targets and matching retries', () => {
+  for (const name of ['xsk-archive-req', 'xsk-point']) {
+    const c = body(skills.find((s) => s.name === name));
+    assert.ok(/Revalidate source and archive target immediately before publication/.test(c), name + ' refreshes both paths');
+    assert.ok(/create-only publication with no-clobber semantics/.test(c), name + ' refuses racing replacement');
+    assert.ok(/overwriting write or rename is insufficient/.test(c), name + ' does not confuse atomic replacement with create-only');
+    assert.ok(/without rewriting/.test(c), name + ' reuses matching archives');
+    assert.ok(/winning target/.test(c) && /either file changed/.test(c), name + ' preserves drifted files');
+  }
+});
+
+test('skill-behavior: executor handles new requirement decisions without replanning authorized work', () => {
+  const c = body(skills.find((s) => s.name === 'xsk-execute-req'));
+  assert.ok(/At any execution stage/.test(c), 'scope changes are checked during execution too');
+  assert.ok(/pause the affected work.*before changing the requirement or implementing it/.test(c), 'unsettled material changes wait for a decision');
+  assert.ok(/Continue independent authorized work/.test(c), 'unaffected work continues');
+  assert.ok(/Apply already authorized changes without another approval/.test(c), 'existing authorization remains usable');
+  assert.ok(/routine implementation choices do not trigger replanning/.test(c), 'routine choices stay lightweight');
 });
 
 test('skill-behavior: xsk-check: review-only diff scope, hard stops, evidence gate, verify, stop', () => {

@@ -25,7 +25,9 @@ If no active doc exists, report that there is nothing to archive. For an explici
 
 For an `xsk-execute-req` call, compare the bound document with the requirement whose scope and acceptance were actually verified. New or unimplemented content must not be archived; return it for execution/revalidation instead. Do not replace this check with a completed checkbox or whichever doc is currently active.
 
-**3. Write before removing.** Ensure `.xsk/.gitignore` contains `requirements/archive/`: create it if absent, otherwise append only the missing line. Preserve other rules. Write the fully-updated archived content with `status: archived` and `archived_at: <ISO date>`, preserving every other field and the entire body, including Execution evidence. Confirm it landed as written; re-read the source and confirm it has not changed since that copy was prepared, then remove the source active doc. If the source changed or removal fails, preserve recoverable files and report the remaining action. A verified matching retry copy only needs the unfinished removal.
+**3. Write before removing.** Ensure `.xsk/.gitignore` contains `requirements/archive/`: create it if absent, otherwise append only the missing line. Preserve other rules. Revalidate source and archive target immediately before publication. Write the fully-updated archived content with `status: archived` and `archived_at: <ISO date>`, preserving every other field and the entire body, including Execution evidence. For an absent target, use create-only publication with no-clobber semantics; a prior existence check followed by an overwriting write or rename is insufficient. If another writer wins creation, stop and preserve the source and winning target. Reuse a verified matching retry archive without rewriting it or changing archived_at.
+
+Confirm it landed as written; re-read the source and confirm it has not changed since that copy was prepared, and re-read the archive to confirm it still matches the prepared archived content, then remove the source active doc. If either file changed or source removal fails, preserve recoverable files and report the remaining action. A verified matching retry copy only needs the unfinished removal.
 
 **4. Report the actual result.** Confirm the archive content, source removal, and zero active documents after success. If another active doc appeared, report that fact without removing it. A failure after implementation completion is an archival failure, not a reason to redo the code. Return the archive path and changed paths to an invoking workflow; suppress commit offers and next-action menus. Standalone archival reports and stops.
 
@@ -41,5 +43,5 @@ When invoked by `xsk-execute-req`, return the result and changed paths without a
 
 - Triggers are matched by intent, not by exact wording. The phrases listed under "When to use" are cues, not a required incantation.
 - Write in natural, direct prose. No formulaic openers, no filler conclusions, no restating the request before you answer it.
-- When a decision would change the implementation, surface it as a short question and let the user decide. Do not pick silently.
+- Resolve consequential decisions from existing context and authorization. Ask only about unresolved choices affecting goals, behavior, interfaces, scope, or material cost. Routine local implementation choices follow project evidence; do not ask again for work already authorized.
 - These are instruction skills. They shape how work is approached, not what the agent is technically capable of.

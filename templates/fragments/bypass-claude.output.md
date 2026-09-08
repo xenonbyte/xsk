@@ -1,1 +1,1 @@
-Report only the path written (`.claude/settings.local.json`) and that `permissions.defaultMode` is `bypassPermissions`. Do not include preserved setting values. Take no further action.
+Report only the path written or already configured (`.claude/settings.local.json`) and that `permissions.defaultMode` is `bypassPermissions`; distinguish a write from a no-op. For refusal, state the reason without claiming a configuration change. Do not include preserved setting values. Take no further action.
